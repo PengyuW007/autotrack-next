@@ -20,6 +20,92 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Architecture
+````
+autotrack-next
+├── app
+│   ├── page.tsx                  # landing entrance
+│   ├── layout.tsx
+│   ├── globals.css
+│   │
+│   ├── login                     # login page
+│   │   └── page.tsx
+│   ├── register                  # register page
+│   │   └── page.tsx
+│   ├── dashboard
+│   │   └── page.tsx              # dashboard/summary page
+│   ├── leads
+│   │   ├── page.tsx              # leads list
+│   │   └── [id]
+│   │       └── page.tsx          # lead detail page
+│   ├── agenda
+│   │   └── page.tsx
+│   ├── (analytics)
+│   │   └── page.tsx
+│   └── (settings)
+│       └── page.tsx
+│
+├── components
+│   ├── layout
+│   │   ├── Sidebar.tsx
+│   │   └── TopBar.tsx
+│   ├── dashboard
+│   │   ├── SummaryCard.tsx
+│   │   └── RecentActivity.tsx
+│   ├── leads
+│   │   ├── LeadTable.tsx
+│   │   ├── LeadCard.tsx
+│   │   └── LeadBriefModal.tsx
+│   ├── agenda
+│   │   └── AgendaTaskCard.tsx
+│   └── analytics
+│       └── AnalyticsCard.tsx
+│
+├── domain
+│   ├── objects
+│   │   ├── Lead.ts
+│   │   ├── Task.ts
+│   │   ├── Vehicle.ts
+│   │   ├── Notification.ts
+│   │   └── Event.ts
+│   └── business
+│       ├── AccessObjects.ts
+│       ├── ScoringService.ts
+│       ├── PriorityManager.ts
+│       ├── LeadInteractionManager.ts
+│       └── AgendaService.ts
+│
+├── lib
+│   ├── database.ts
+│   └── persistence
+│       └── interfaces
+│       │   ├── LeadDataAccess.ts
+│       │   ├── TaskDataAccess.ts
+│       │   └── VehicleDataAccess.ts
+│       ├── LeadRepository.ts
+│       ├── TaskRepository.ts
+│       └── VehicleRepository.ts
+│
+├── hooks
+│   ├── useLeads.ts
+│   ├── useAgenda.ts
+│   └── useDashboard.ts
+│
+├── styles
+│   ├── layout.module.css
+│   ├── dashboard.module.css
+│   └── leads.module.css
+│
+├── utils
+│   ├── dateUtils.ts
+│   └── scoreUtils.ts
+│
+└── public
+    ├── images
+    ├── icons
+    └── favicon.ico
+````
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
