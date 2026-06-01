@@ -79,9 +79,10 @@ autotrack-next
 │   ├── database.ts
 │   └── persistence
 │       └── interfaces
-│       │   ├── LeadDataAccess.ts
-│       │   ├── TaskDataAccess.ts
-│       │   └── VehicleDataAccess.ts
+│       │   ├── DataAccessLead.ts
+│       │   ├── DataAccessTask.ts
+│       │   ├── DataAccessNotification.ts
+│       │   └── DataAccessVehicle.ts
 │       ├── LeadRepository.ts
 │       ├── TaskRepository.ts
 │       └── VehicleRepository.ts

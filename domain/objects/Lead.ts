@@ -1,5 +1,3 @@
-// domain/objects/Lead.ts
-
 import { Vehicle } from "./Vehicle";
 
 export class Lead {
