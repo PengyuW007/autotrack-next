@@ -1,9 +1,9 @@
 import { Lead } from "@/domain/objects/Lead";
 
 export interface LeadDataAccess {
-    getAllLeads(): Promise<Lead[]>;
-    getLeadById(id: number): Promise<Lead | null>;
-    createLead(lead: Lead): Promise<Lead>;
-    updateLead(lead: Lead): Promise<Lead>;
-    deleteLead(id: number): Promise<void>;
+    getAllLeads(): Lead[];
+    getLeadById(id: number): Lead | null;
+    insertLead(lead: Lead): string | null;
+    updateLead(lead: Lead): string | null;
+    deleteLead(id: number): string | null;
 }
