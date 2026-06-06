@@ -243,7 +243,7 @@ instead of a real database.
 Status:
 
 ```text
-Pending
+Completed
 ```
 
 ---
