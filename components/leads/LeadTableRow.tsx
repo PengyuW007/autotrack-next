@@ -50,8 +50,12 @@ export default function LeadTableRow({lead, onStatusChange,onViewBrief, onDelete
             <td className="px-4 py-4 font-medium text-gray-900">
                 <div className="flex items-center gap-2">
                     <button
-                        onClick={() => onViewBrief(lead)}
-                        className="rounded border px-2 py-1 text-sm hover:bg-gray-100"
+                        onClick={() => {
+                            console.log("Clicked", lead);
+                            onViewBrief(lead)
+                        }
+                    }
+                        className="cursor-pointer text-gray-500 hover:text-blue-600"
                         title="View lead brief"
                     >
                         👁
@@ -93,19 +97,19 @@ export default function LeadTableRow({lead, onStatusChange,onViewBrief, onDelete
             </td>
 
             <td className="px-4 py-4">
-                <div className="flex gap-2">
+                <div className="flex items-center gap-4 text-lg">
                     <Link
                         href={`/leads/${lead.leadID}`}
-                        className="rounded border px-3 py-1 text-sm text-blue-600 hover:bg-blue-50"
+                        className="text-blue-600 hover:bg-blue-50"
                     >
-                        Modify
+                        ✏️
                     </Link>
 
                     <button
                         onClick={() => onDelete(lead.leadID)}
-                        className="rounded border px-3 py-1 text-sm text-red-600 hover:bg-red-50"
+                        className="text-red-600 hover:text-red-800"
                     >
-                        Delete
+                        🗑️
                     </button>
                 </div>
             </td>
