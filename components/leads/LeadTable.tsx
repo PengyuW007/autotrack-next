@@ -3,18 +3,24 @@
 import { useState } from "react";
 import { Lead } from "@/domain/objects/Lead";
 import LeadTableRow from "./LeadTableRow";
+import LeadBriefModal from "./LeadBriefModal";
 
 interface LeadTableProps {
     leads: Lead[];
 }
 
 export default function LeadTable({ leads }: LeadTableProps) {
+    const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
     const [leadList, setLeadList] = useState<Lead[]>(leads);
     const [searchText, setSearchText] = useState("");
     const [statusFilter, setStatusFilter] = useState("ALL");
     const [stageFilter, setStageFilter] = useState("ALL");
     const [tradeInFilter, setTradeInFilter] = useState("ALL");
     const [scoreFilter, setScoreFilter] = useState("ALL");
+
+    const handleDeleteLead = (leadId: number) => {
+        setLeadList(leadList.filter((lead) => lead.leadID !== leadId));
+    };
 
     const handleStatusChange = (leadId: number, newStatus: boolean) => {
         const updatedLeads = leadList.map((lead) => {
@@ -137,7 +143,8 @@ export default function LeadTable({ leads }: LeadTableProps) {
                         <th className="px-4 py-4">Trade-in Vehicle</th>
                         <th className="px-4 py-4">Stage</th>
                         <th className="px-4 py-4">Score</th>
-                        <th className="px-4 py-4">Created At</th>
+                        <th className="px-4 py-4">Last Contact</th>
+                        <th className="px-4 py-4">Actions</th>
                     </tr>
                     </thead>
 
@@ -147,11 +154,20 @@ export default function LeadTable({ leads }: LeadTableProps) {
                             key={lead.leadID}
                             lead={lead}
                             onStatusChange={handleStatusChange}
+                            onViewBrief={setSelectedLead}
+                            onDelete={handleDeleteLead}
                         />
+
+
                     ))}
                     </tbody>
                 </table>
             </div>
+
+            <LeadBriefModal
+                lead={selectedLead}
+                onClose={() => setSelectedLead(null)}
+            />
         </div>
     );
 }

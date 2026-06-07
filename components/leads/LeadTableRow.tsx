@@ -7,9 +7,11 @@ interface LeadTableRowProps {
         leadId: number,
         status: boolean
     ) => void;
+    onViewBrief: (lead: Lead) => void;
+    onDelete: (leadId: number) => void;
 }
 
-export default function LeadTableRow({lead, onStatusChange}: LeadTableRowProps) {
+export default function LeadTableRow({lead, onStatusChange,onViewBrief, onDelete,}: LeadTableRowProps) {
     const formatDate = (date: Date | null | undefined): string => {
         if (!date) {
             return "N/A";
@@ -45,16 +47,28 @@ export default function LeadTableRow({lead, onStatusChange}: LeadTableRowProps) 
                 </div>
             </td>
 
-            <td className="px-4 py-4 font-medium text-blue-600">
-                <Link href={`/leads/${lead.leadID}`}>
-                    {lead.getLeadName()}
-                </Link>
+            <td className="px-4 py-4 font-medium text-gray-900">
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => onViewBrief(lead)}
+                        className="rounded border px-2 py-1 text-sm hover:bg-gray-100"
+                        title="View lead brief"
+                    >
+                        👁
+                    </button>
+
+                    <Link href={`/leads/${lead.leadID}`} className="text-blue-600">
+                        {lead.getLeadName()}
+                    </Link>
+                </div>
             </td>
 
             <td className="px-4 py-4">
-                <div>{lead.phone || "N/A"}</div>
-                <div className="text-gray-500">
+                <div className="text-gray-900">
                     {lead.leadEmail || "N/A"}
+                </div>
+                <div className="text-gray-500">
+                    {lead.phone || "N/A"}
                 </div>
             </td>
 
@@ -75,8 +89,27 @@ export default function LeadTableRow({lead, onStatusChange}: LeadTableRowProps) 
             </td>
 
             <td className="px-4 py-4">
-                {formatDate(lead.createdAt)}
+                {formatDate(lead.lastInteractionDate)}
             </td>
+
+            <td className="px-4 py-4">
+                <div className="flex gap-2">
+                    <Link
+                        href={`/leads/${lead.leadID}`}
+                        className="rounded border px-3 py-1 text-sm text-blue-600 hover:bg-blue-50"
+                    >
+                        Modify
+                    </Link>
+
+                    <button
+                        onClick={() => onDelete(lead.leadID)}
+                        className="rounded border px-3 py-1 text-sm text-red-600 hover:bg-red-50"
+                    >
+                        Delete
+                    </button>
+                </div>
+            </td>
+
         </tr>
     );
 }
