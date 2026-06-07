@@ -3,6 +3,10 @@ import { Lead } from "@/domain/objects/Lead";
 
 interface LeadTableRowProps {
     lead: Lead;
+    onStatusChange: (
+        leadId: number,
+        status: boolean
+    ) => void;
 }
 
 export default function LeadTableRow({ lead }: LeadTableRowProps) {
@@ -18,7 +22,36 @@ export default function LeadTableRow({ lead }: LeadTableRowProps) {
     return (
         <tr className="border-b hover:bg-gray-50">
             <td className="px-4 py-4">
-                {lead.status ? "Active" : "Inactive"}
+                <div className="flex items-center gap-2">
+
+        <span
+            className={`h-3 w-3 rounded-full ${
+                lead.status
+                    ? "bg-green-500"
+                    : "bg-red-500"
+            }`}
+        />
+
+                    <select
+                        value={lead.status ? "ACTIVE" : "LOST"}
+                        onChange={(e) =>
+                            onStatusChange(
+                                lead.leadID,
+                                e.target.value === "ACTIVE"
+                            )
+                        }
+                        className="rounded border px-2 py-1 text-sm"
+                    >
+                        <option value="ACTIVE">
+                            Active
+                        </option>
+
+                        <option value="LOST">
+                            Lost
+                        </option>
+                    </select>
+
+                </div>
             </td>
 
             <td className="px-4 py-4 font-medium text-blue-600">
