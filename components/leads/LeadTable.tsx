@@ -9,13 +9,26 @@ interface LeadTableProps {
 }
 
 export default function LeadTable({ leads }: LeadTableProps) {
+    const [leadList, setLeadList] = useState<Lead[]>(leads);
     const [searchText, setSearchText] = useState("");
     const [statusFilter, setStatusFilter] = useState("ALL");
     const [stageFilter, setStageFilter] = useState("ALL");
     const [tradeInFilter, setTradeInFilter] = useState("ALL");
     const [scoreFilter, setScoreFilter] = useState("ALL");
 
-    const filteredLeads = leads.filter((lead) => {
+    const handleStatusChange = (leadId: number, newStatus: boolean) => {
+        const updatedLeads = leadList.map((lead) => {
+            if (lead.leadID === leadId) {
+                lead.status = newStatus;
+            }
+
+            return lead;
+        });
+
+        setLeadList([...updatedLeads]);
+    };
+
+    const filteredLeads = leadList.filter((lead) => {
         const keyword = searchText.toLowerCase();
 
         const matchesSearch =
@@ -26,7 +39,7 @@ export default function LeadTable({ leads }: LeadTableProps) {
         const matchesStatus =
             statusFilter === "ALL" ||
             (statusFilter === "ACTIVE" && lead.status) ||
-            (statusFilter === "INACTIVE" && !lead.status);
+            (statusFilter === "LOST" && !lead.status);
 
         const matchesStage =
             stageFilter === "ALL" ||
@@ -73,7 +86,7 @@ export default function LeadTable({ leads }: LeadTableProps) {
                     >
                         <option value="ALL">All Status</option>
                         <option value="ACTIVE">Active</option>
-                        <option value="INACTIVE">Inactive</option>
+                        <option value="LOST">Lost</option>
                     </select>
 
                     <select
@@ -133,15 +146,7 @@ export default function LeadTable({ leads }: LeadTableProps) {
                         <LeadTableRow
                             key={lead.leadID}
                             lead={lead}
-                            onStatusChange={(leadId, newStatus) => {
-                                const targetLead = leads.find(
-                                    l => l.leadID === leadId
-                                );
-
-                                if (targetLead) {
-                                    targetLead.status = newStatus;
-                                }
-                            }}
+                            onStatusChange={handleStatusChange}
                         />
                     ))}
                     </tbody>
