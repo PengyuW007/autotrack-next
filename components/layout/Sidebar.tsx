@@ -2,13 +2,34 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import {
+    LayoutDashboard,
+    Users,
+    CalendarDays,
+    BarChart3,
+} from "lucide-react";
 
 const navItems = [
-    { label: "Dashboard", href: "/dashboard", icon: "⌂" },
-    { label: "Leads", href: "/leads", icon: "👥" },
-    { label: "Agenda", href: "/agenda", icon: "▣" },
-    { label: "Analytics", href: "/analytics", icon: "▥" },
-    // { label: "Settings", href: "/settings", icon: "⚙" },
+    {
+        label: "Dashboard",
+        href: "/dashboard",
+        icon: LayoutDashboard,
+    },
+    {
+        label: "Leads",
+        href: "/leads",
+        icon: Users,
+    },
+    {
+        label: "Agenda",
+        href: "/agenda",
+        icon: CalendarDays,
+    },
+    {
+        label: "Analytics",
+        href: "/analytics",
+        icon: BarChart3,
+    },
 ];
 
 export default function Sidebar() {
@@ -35,17 +56,26 @@ export default function Sidebar() {
                 </button>
             </div>
 
-            <nav className="mt-6 flex flex-col gap-3 px-4">
-                {navItems.map((item) => (
-                    <Link
-                        key={item.href}
-                        href={item.href}
-                        className="flex items-center gap-4 rounded-xl px-4 py-4 text-lg font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-600"
-                    >
-                        <span className="text-2xl">{item.icon}</span>
-                        {!collapsed && <span>{item.label}</span>}
-                    </Link>
-                ))}
+            <nav className="mt-6 flex flex-col gap-2 px-4">
+                {navItems.map((item) => {
+                    const Icon = item.icon;
+
+                    return (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className="flex items-center gap-3 rounded-lg px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                        >
+                            <Icon size={20} />
+
+                            {!collapsed && (
+                                <span className="font-medium">
+                        {item.label}
+                    </span>
+                            )}
+                        </Link>
+                    );
+                })}
             </nav>
 
             <div className="mt-auto border-t border-gray-200 px-6 py-6">
