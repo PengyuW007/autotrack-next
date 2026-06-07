@@ -8,6 +8,7 @@ import {
     CalendarDays,
     BarChart3,
 } from "lucide-react";
+import Image from "next/image";
 
 const navItems = [
     {
@@ -42,17 +43,35 @@ export default function Sidebar() {
             }`}
         >
             <div className="flex items-center justify-between px-6 py-6">
-                {!collapsed && (
-                    <h1 className="text-3xl font-bold text-blue-600">
-                        AutoTrack
-                    </h1>
-                )}
+                <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 overflow-hidden rounded-xl">
+                        <Image
+                            src="/ic_autotrack_blue.png"
+                            alt="AutoTrack Logo"
+                            width={48}
+                            height={48}
+                            className="rounded-xl opacity-75"
+                            priority
+                        />
+                    </div>
+
+                    {!collapsed ? (
+                        <div>
+                            <h1 className="text-xl font-bold text-gray-900">
+                                AutoTrack
+                            </h1>
+                            <p className="text-xs text-gray-500">
+                                CRM
+                            </p>
+                        </div>
+                    ) : null}
+                </div>
 
                 <button
                     onClick={() => setCollapsed(!collapsed)}
-                    className="rounded-lg border border-gray-200 px-3 py-2 text-gray-700 hover:bg-gray-100"
+                    className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-blue-600"
                 >
-                    {collapsed ? "»" : "‹"}
+                    {collapsed ? "»" : "«"}
                 </button>
             </div>
 
