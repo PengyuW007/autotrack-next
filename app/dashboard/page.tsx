@@ -85,6 +85,12 @@ const todayTasks = [
         time: "3:00 PM",
         icon: UserRound,
     },
+    {
+        title: "Follow up with Linda after test drive",
+        type: "Follow-up",
+        time: "4:00 PM",
+        icon: UserRound,
+    },
 ];
 
 const activities = [
@@ -98,14 +104,14 @@ export default function DashboardPage() {
     return (
         <main className="min-h-screen bg-slate-50 px-8 py-8 text-slate-900">
             <section className="mb-8">
-                <p className="text-sm font-medium text-blue-600">Dashboard</p>
+                {/*<p className="text-sm font-medium text-blue-600">Dashboard</p>*/}
                 <h1 className="mt-2 text-4xl font-bold text-slate-950">
                     Today&apos;s Sales Command Center
                 </h1>
-                <p className="mt-3 max-w-2xl text-slate-500">
-                    Track today&apos;s follow-ups, urgent customer messages, and priority
-                    leads in one place.
-                </p>
+                {/*<p className="mt-3 max-w-2xl text-slate-500">*/}
+                {/*    Track today&apos;s follow-ups, urgent customer messages, and priority*/}
+                {/*    leads in one place.*/}
+                {/*</p>*/}
             </section>
 
             <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
