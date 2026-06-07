@@ -144,7 +144,7 @@ export default function LeadTable({ leads }: LeadTableProps) {
                         <th className="px-4 py-4">Stage</th>
                         <th className="px-4 py-4">Score</th>
                         <th className="px-4 py-4">Last Contact</th>
-                        <th className="px-4 py-4">Actions</th>
+                        <th className="w-32 px-4 py-4 text-center">Actions</th>
                     </tr>
                     </thead>
 

@@ -1,5 +1,10 @@
 import Link from "next/link";
 import {Lead} from "@/domain/objects/Lead";
+import {
+    Eye,
+    Pencil,
+    Trash2
+} from "lucide-react";
 
 interface LeadTableRowProps {
     lead: Lead;
@@ -56,9 +61,9 @@ export default function LeadTableRow({lead, onStatusChange,onViewBrief, onDelete
                         }
                     }
                         className="cursor-pointer text-gray-500 hover:text-blue-600"
-                        title="View lead brief"
+                        title="Eye view lead brief"
                     >
-                        👁
+                        <Eye size={18} strokeWidth={2} />
                     </button>
 
                     <Link href={`/leads/${lead.leadID}`} className="text-blue-600">
@@ -97,19 +102,21 @@ export default function LeadTableRow({lead, onStatusChange,onViewBrief, onDelete
             </td>
 
             <td className="px-4 py-4">
-                <div className="flex items-center gap-4 text-lg">
+                <div className="flex items-center justify-center gap-4">
                     <Link
                         href={`/leads/${lead.leadID}`}
-                        className="text-blue-600 hover:bg-blue-50"
+                        className="text-blue-600 hover:text-blue-800"
+                        title="Modify Lead"
                     >
-                        ✏️
+                        <Pencil size={18} />
                     </Link>
 
                     <button
                         onClick={() => onDelete(lead.leadID)}
-                        className="text-red-600 hover:text-red-800"
+                        className="cursor-pointer text-red-600 hover:text-red-800"
+                        title="Delete Lead"
                     >
-                        🗑️
+                        <Trash2 size={18} />
                     </button>
                 </div>
             </td>
