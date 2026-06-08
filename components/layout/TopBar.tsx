@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
     Bell,
     CalendarDays,
@@ -8,6 +9,31 @@ import {
 } from "lucide-react";
 
 export default function TopBar() {
+    const pageInfoMap: Record<string, { title: string; description: string }> = {
+        "/dashboard": {
+            title: "Dashboard",
+            description: "Overview of today's priorities and follow-up actions.",
+        },
+        "/leads": {
+            title: "Leads",
+            description: "Manage customer leads, stages, and follow-up status.",
+        },
+        "/agenda": {
+            title: "Agenda",
+            description: "Daily follow-up activities generated from leads and tasks.",
+        },
+        "/analytics": {
+            title: "Analytics",
+            description: "Track sales performance, lead trends, and activity insights.",
+        },
+    };
+
+    const pathname = usePathname();
+
+    const pageInfo = pageInfoMap[pathname] ?? {
+        title: "AutoTrack CRM",
+        description: "Scientific sales follow-up system",
+    };
 
     const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -40,12 +66,11 @@ export default function TopBar() {
         <header className="flex h-20 items-center justify-between border-b bg-white px-8">
 
             <div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                    AutoTrack CRM
-                </h2>
-
-                <p className="text-gray-500">
-                    Scientific sales follow-up system
+                <h1 className="text-2xl font-bold text-slate-950">
+                    {pageInfo.title}
+                </h1>
+                <p className="text-sm text-slate-500">
+                    {pageInfo.description}
                 </p>
             </div>
 

@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AgendaService } from "@/domain/business/AgendaService";
-import { ScoringService } from "@/domain/business/ScoringService";
-import { PriorityManager } from "@/domain/business/PriorityManager";
+import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 
 import AgendaCalendar from "@/components/agenda/AgendaCalendar";
 import AgendaActivityPanel from "@/components/agenda/AgendaActivityPanel";
+
+import { AgendaService } from "@/domain/business/AgendaService";
+import { ScoringService } from "@/domain/business/ScoringService";
+import { PriorityManager } from "@/domain/business/PriorityManager";
 
 import { LeadRepo } from "@/lib/persistence/stub/LeadRepo";
 import { TaskRepo } from "@/lib/persistence/stub/TaskRepo";
@@ -45,26 +47,43 @@ export default function AgendaPage() {
     }
 
     return (
-        <main className="flex h-[calc(100vh-88px)] flex-col gap-4 p-6">
+        <main className="flex h-[calc(100vh-88px)] flex-col gap-4 px-6 pt-3 pb-6">
             <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold">Agenda</h1>
-                    <p className="text-sm text-slate-500">
-                        Daily follow-up activities generated from leads and tasks.
-                    </p>
-                </div>
+                {/*<div>*/}
+                {/*    <h1 className="text-2xl font-bold">Agenda</h1>*/}
+                {/*    <p className="text-sm text-slate-500">*/}
+                {/*        Daily follow-up activities generated from leads and tasks.*/}
+                {/*    </p>*/}
+                {/*</div>*/}
 
                 <div className="flex gap-2">
-                    <button onClick={() => changeDate(-1)}>Previous</button>
+                    <button
+                        onClick={() => changeDate(-1)}
+                        className="rounded-lg border border-slate-200 p-2 hover:bg-slate-100"
+                    >
+                        <ChevronLeft size={18} />
+                    </button>
 
                     <input
                         type="date"
                         value={selectedDate.toISOString().split("T")[0]}
                         onChange={(e) => setSelectedDate(new Date(e.target.value))}
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                     />
 
-                    <button onClick={() => changeDate(1)}>Next</button>
-                    <button onClick={() => setSelectedDate(new Date())}>Today</button>
+                    <button
+                        onClick={() => changeDate(1)}
+                        className="rounded-lg border border-slate-200 p-2 hover:bg-slate-100"
+                    >
+                        <ChevronRight size={18} />
+                    </button>
+
+                    <button
+                        onClick={() => setSelectedDate(new Date())}
+                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+                    >
+                       Back to Today
+                    </button>
                 </div>
             </div>
 
