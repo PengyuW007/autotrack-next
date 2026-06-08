@@ -10,7 +10,7 @@ export default function AgendaActivityPanel({
                                                 agendaLeads,
                                             }: Props) {
     return (
-        <section className="h-1/2 rounded-2xl border bg-white p-4 shadow-sm">
+        <section className="min-h-[320px] rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
                 <div>
                     <h2 className="text-lg font-semibold">Today&apos;s Activities</h2>
@@ -20,11 +20,11 @@ export default function AgendaActivityPanel({
                 </div>
 
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-sm">
-          {agendaLeads.length} items
+          {agendaLeads.length} Tasks
         </span>
             </div>
 
-            <div className="h-[calc(100%-72px)] space-y-3 overflow-y-auto pr-2">
+            <div className="h-[240px] space-y-3 overflow-y-auto pr-2">
                 {agendaLeads.map((lead) => (
                     <div key={lead.leadID} className="rounded-xl border p-4">
                         <div className="flex justify-between">

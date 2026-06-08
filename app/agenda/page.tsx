@@ -47,7 +47,7 @@ export default function AgendaPage() {
     }
 
     return (
-        <main className="flex h-[calc(100vh-88px)] flex-col gap-4 px-6 pt-3 pb-6">
+        <main className="flex min-h-[calc(100vh-88px)] flex-col gap-6 px-4 pt-3 pb-6">
             <div className="flex items-center justify-between">
                 {/*<div>*/}
                 {/*    <h1 className="text-2xl font-bold">Agenda</h1>*/}

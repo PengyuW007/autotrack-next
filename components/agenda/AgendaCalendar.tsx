@@ -35,7 +35,7 @@ export default function AgendaCalendar({
     }
 
     return (
-        <section className="h-1/2 rounded-2xl border bg-white p-4 shadow-sm">
+        <section className="w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
                 <button onClick={() => changeMonth(-1)} className="rounded-lg border px-3 py-1">
                     ←
@@ -68,7 +68,7 @@ export default function AgendaCalendar({
                         <button
                             key={date.toISOString()}
                             onClick={() => onSelectDate(date)}
-                            className={`min-h-[70px] border-r border-b p-2 text-left hover:bg-blue-50 ${
+                            className={`min-h-[66px] border-b border-r p-2 text-left hover:bg-blue-50 ${
                                 active ? "bg-blue-100" : ""
                             } ${muted ? "text-slate-300" : "text-slate-700"}`}
                         >
