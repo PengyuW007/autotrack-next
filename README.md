@@ -288,7 +288,7 @@ AgendaCard
 Status:
 
 ```text
-Pending
+Completed
 ```
 
 ---
