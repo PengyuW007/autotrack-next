@@ -1,3 +1,5 @@
+import { X } from "lucide-react";
+
 import { Lead } from "@/domain/objects/Lead";
 
 interface LeadBriefModalProps {
@@ -6,11 +8,13 @@ interface LeadBriefModalProps {
 }
 
 export default function LeadBriefModal({ lead, onClose }: LeadBriefModalProps) {
-    if (!lead) return null;
+    if (!lead) {
+        return null;
+    }
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-lg">
+            <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-lg">
                 <div className="mb-4 flex items-center justify-between">
                     <h2 className="text-xl font-bold text-gray-900">
                         Lead Brief
@@ -18,9 +22,10 @@ export default function LeadBriefModal({ lead, onClose }: LeadBriefModalProps) {
 
                     <button
                         onClick={onClose}
-                        className="text-gray-500 hover:text-gray-900"
+                        className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                        aria-label="Close lead brief"
                     >
-                        ✕
+                        <X size={18} />
                     </button>
                 </div>
 

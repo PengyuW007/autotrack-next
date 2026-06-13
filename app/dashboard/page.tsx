@@ -212,7 +212,7 @@ export default function DashboardPage() {
                                             {task.title}
                                         </h3>
                                         <p className="mt-1 text-sm text-slate-500">
-                                            {task.type} · {task.time}
+                                            {task.type} - {task.time}
                                         </p>
                                     </div>
 

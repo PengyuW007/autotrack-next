@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
 type Props = {
     selectedDate: Date;
     onSelectDate: (date: Date) => void;
@@ -7,10 +9,10 @@ type Props = {
 };
 
 export default function AgendaCalendar({
-                                           selectedDate,
-                                           onSelectDate,
-                                           agendaCount,
-                                       }: Props) {
+    selectedDate,
+    onSelectDate,
+    agendaCount,
+}: Props) {
     const year = selectedDate.getFullYear();
     const month = selectedDate.getMonth();
 
@@ -35,10 +37,14 @@ export default function AgendaCalendar({
     }
 
     return (
-        <section className="w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="w-full rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-                <button onClick={() => changeMonth(-1)} className="rounded-lg border px-3 py-1">
-                    ←
+                <button
+                    onClick={() => changeMonth(-1)}
+                    className="rounded-lg border px-3 py-1"
+                    aria-label="Previous month"
+                >
+                    <ChevronLeft size={16} />
                 </button>
 
                 <h2 className="text-lg font-semibold">
@@ -48,8 +54,12 @@ export default function AgendaCalendar({
                     })}
                 </h2>
 
-                <button onClick={() => changeMonth(1)} className="rounded-lg border px-3 py-1">
-                    →
+                <button
+                    onClick={() => changeMonth(1)}
+                    className="rounded-lg border px-3 py-1"
+                    aria-label="Next month"
+                >
+                    <ChevronRight size={16} />
                 </button>
             </div>
 

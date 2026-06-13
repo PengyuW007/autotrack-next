@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import AgendaCalendar from "@/components/agenda/AgendaCalendar";
 import AgendaActivityPanel from "@/components/agenda/AgendaActivityPanel";

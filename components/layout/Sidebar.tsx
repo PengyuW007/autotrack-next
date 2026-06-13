@@ -1,14 +1,16 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import {
+    BarChart3,
+    CalendarDays,
+    ChevronLeft,
+    ChevronRight,
     LayoutDashboard,
     Users,
-    CalendarDays,
-    BarChart3,
 } from "lucide-react";
-import Image from "next/image";
 
 const navItems = [
     {
@@ -44,13 +46,13 @@ export default function Sidebar() {
         >
             <div className="flex items-center justify-between px-6 py-6">
                 <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 overflow-hidden rounded-xl">
+                    <div className="h-12 w-12 overflow-hidden rounded-lg">
                         <Image
                             src="/ic_autotrack_blue.png"
                             alt="AutoTrack Logo"
                             width={48}
                             height={48}
-                            className="rounded-xl opacity-75"
+                            className="rounded-lg opacity-75"
                             priority
                         />
                     </div>
@@ -70,8 +72,9 @@ export default function Sidebar() {
                 <button
                     onClick={() => setCollapsed(!collapsed)}
                     className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-blue-600"
+                    aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 >
-                    {collapsed ? "»" : "«"}
+                    {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
                 </button>
             </div>
 
@@ -89,8 +92,8 @@ export default function Sidebar() {
 
                             {!collapsed && (
                                 <span className="font-medium">
-                        {item.label}
-                    </span>
+                                    {item.label}
+                                </span>
                             )}
                         </Link>
                     );
