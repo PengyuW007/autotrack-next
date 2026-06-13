@@ -242,7 +242,7 @@ export default function DashboardPage() {
     });
 
     return (
-        <main className="min-h-screen bg-slate-50 px-8 py-8 text-slate-900">
+        <main className="bg-slate-50 text-slate-900">
             <section className="mb-8">
                 <h1 className="text-4xl font-bold text-slate-950">
                     Today&apos;s Sales Command Center
