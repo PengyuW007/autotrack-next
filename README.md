@@ -336,7 +336,7 @@ Features:
 Status:
 
 ```text
-Pending
+Completed
 ```
 
 ---
