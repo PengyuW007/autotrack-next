@@ -30,10 +30,16 @@ export default function TopBar() {
 
     const pathname = usePathname();
 
-    const pageInfo = pageInfoMap[pathname] ?? {
-        title: "AutoTrack CRM",
-        description: "Scientific sales follow-up system",
-    };
+    const pageInfo =
+        pathname.startsWith("/leads/") && pathname !== "/leads"
+            ? {
+                  title: "Lead Details",
+                  description: "View customer information, sales status, vehicle interest, and notes.",
+              }
+            : pageInfoMap[pathname] ?? {
+                  title: "AutoTrack CRM",
+                  description: "Scientific sales follow-up system",
+              };
 
     const [currentTime, setCurrentTime] = useState(new Date());
 

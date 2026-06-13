@@ -243,15 +243,6 @@ export default function DashboardPage() {
 
     return (
         <main className="bg-slate-50 text-slate-900">
-            <section className="mb-8">
-                <h1 className="text-4xl font-bold text-slate-950">
-                    Today&apos;s Sales Command Center
-                </h1>
-                <p className="mt-3 max-w-3xl text-sm text-slate-500">
-                    Dashboard summarizes the most important actions from Agenda, Leads, and future notifications without replacing those pages.
-                </p>
-            </section>
-
             <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                 {summaryCards.map((card) => {
                     const Icon = card.icon;

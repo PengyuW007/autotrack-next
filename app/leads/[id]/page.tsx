@@ -72,14 +72,10 @@ export default async function LeadDetailPage({
 
     return (
         <div>
-            <div className="mb-6">
+            <div className="mb-4">
                 <Link href="/leads" className="text-sm text-blue-600">
                     Back to Leads
                 </Link>
-
-                <h1 className="mt-2 text-2xl font-bold text-gray-900">
-                    Lead Details
-                </h1>
             </div>
 
             <LeadDetailPanel lead={toLeadDetailViewModel(lead)} />

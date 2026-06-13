@@ -47,15 +47,8 @@ export default function AgendaPage() {
     }
 
     return (
-        <main className="flex min-h-[calc(100vh-88px)] flex-col gap-6 px-4 pt-3 pb-6">
+        <main className="flex flex-col gap-6 pb-6">
             <div className="flex items-center justify-between">
-                {/*<div>*/}
-                {/*    <h1 className="text-2xl font-bold">Agenda</h1>*/}
-                {/*    <p className="text-sm text-slate-500">*/}
-                {/*        Daily follow-up activities generated from leads and tasks.*/}
-                {/*    </p>*/}
-                {/*</div>*/}
-
                 <div className="flex gap-2">
                     <button
                         onClick={() => changeDate(-1)}
