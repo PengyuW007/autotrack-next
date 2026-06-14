@@ -350,32 +350,31 @@ Potential Technologies:
 
 #### Option 1
 
-```text
+
 SQLite
-```
+
 
 #### Option 2
 
-```text
+
 PostgreSQL
-```
 
 #### Option 3
 
-```text
-Supabase
-```
+
+- [x] Supabase
+
 
 #### Option 4
 
-```text
+
 MySQL
-```
+
 
 Recommended for AutoTrack:
 
 ```text
-MySQL
+Supabase
 ```
 
 to maintain compatibility with future mobile and web synchronization.
@@ -383,7 +382,7 @@ to maintain compatibility with future mobile and web synchronization.
 Status:
 
 ```text
-Pending
+Completed
 ```
 
 ---
