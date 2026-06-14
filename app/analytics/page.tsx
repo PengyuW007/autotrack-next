@@ -10,10 +10,8 @@ import {
     Users,
 } from "lucide-react";
 
-import { LeadRepo } from "@/lib/persistence/stub/LeadRepo";
-import { TaskRepo } from "@/lib/persistence/stub/TaskRepo";
-import { leadStubDB } from "@/tests/stub/LeadStubDB";
-import { taskStubDB } from "@/tests/stub/TaskStubDB";
+import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
+import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
 
 const moneyFormatter = new Intl.NumberFormat("en-CA", {
     style: "currency",
@@ -45,12 +43,14 @@ function formatDate(date: Date | null | undefined) {
     }).format(date);
 }
 
-export default function AnalyticsPage() {
-    const leadRepository = new LeadRepo(leadStubDB);
-    const taskRepository = new TaskRepo(taskStubDB);
+export default async function AnalyticsPage() {
+    const leadRepository = new LeadRepo();
+    const taskRepository = new TaskRepo();
 
-    const leads = leadRepository.getAllLeads();
-    const tasks = taskRepository.getAllTasks();
+    const [leads, tasks] = await Promise.all([
+        leadRepository.getAllLeads(),
+        taskRepository.getAllTasks(),
+    ]);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);

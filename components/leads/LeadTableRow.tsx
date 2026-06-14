@@ -1,22 +1,23 @@
 import Link from "next/link";
-import {Lead} from "@/domain/objects/Lead";
-import {
-    Eye,
-    Pencil,
-    Trash2
-} from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
+
+import { Lead } from "@/domain/objects/Lead";
 
 interface LeadTableRowProps {
     lead: Lead;
-    onStatusChange: (
-        leadId: number,
-        status: boolean
-    ) => void;
+    onStatusChange: (leadId: number, status: boolean) => void;
     onViewBrief: (lead: Lead) => void;
-    onDelete: (leadId: number) => void;
+    onDelete: (leadId: number) => Promise<void>;
+    deleting: boolean;
 }
 
-export default function LeadTableRow({lead, onStatusChange,onViewBrief, onDelete,}: LeadTableRowProps) {
+export default function LeadTableRow({
+    lead,
+    onStatusChange,
+    onViewBrief,
+    onDelete,
+    deleting,
+}: LeadTableRowProps) {
     const formatDate = (date: Date | null | undefined): string => {
         if (!date) {
             return "N/A";
@@ -25,16 +26,15 @@ export default function LeadTableRow({lead, onStatusChange,onViewBrief, onDelete
         return date.toISOString().split("T")[0];
     };
 
-
     return (
         <tr className="border-b hover:bg-gray-50">
             <td className="px-4 py-4">
                 <div className="flex items-center gap-2">
-        <span
-            className={`h-3 w-3 rounded-full ${
-                lead.status ? "bg-green-500" : "bg-red-500"
-            }`}
-        />
+                    <span
+                        className={`h-3 w-3 rounded-full ${
+                            lead.status ? "bg-green-500" : "bg-red-500"
+                        }`}
+                    />
 
                     <select
                         value={lead.status ? "ACTIVE" : "LOST"}
@@ -55,13 +55,9 @@ export default function LeadTableRow({lead, onStatusChange,onViewBrief, onDelete
             <td className="px-4 py-4 font-medium text-gray-900">
                 <div className="flex items-center gap-2">
                     <button
-                        onClick={() => {
-                            console.log("Clicked", lead);
-                            onViewBrief(lead)
-                        }
-                    }
+                        onClick={() => onViewBrief(lead)}
                         className="cursor-pointer text-gray-500 hover:text-blue-600"
-                        title="Eye view lead brief"
+                        title="View lead brief"
                     >
                         <Eye size={18} strokeWidth={2} />
                     </button>
@@ -113,14 +109,14 @@ export default function LeadTableRow({lead, onStatusChange,onViewBrief, onDelete
 
                     <button
                         onClick={() => onDelete(lead.leadID)}
-                        className="cursor-pointer text-red-600 hover:text-red-800"
+                        disabled={deleting}
+                        className="cursor-pointer text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:text-slate-300"
                         title="Delete Lead"
                     >
                         <Trash2 size={18} />
                     </button>
                 </div>
             </td>
-
         </tr>
     );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Lead } from "@/domain/objects/Lead";
+import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
 import LeadTableRow from "./LeadTableRow";
 import LeadBriefModal from "./LeadBriefModal";
 
@@ -17,9 +18,26 @@ export default function LeadTable({ leads }: LeadTableProps) {
     const [stageFilter, setStageFilter] = useState("ALL");
     const [tradeInFilter, setTradeInFilter] = useState("ALL");
     const [scoreFilter, setScoreFilter] = useState("ALL");
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [deletingLeadId, setDeletingLeadId] = useState<number | null>(null);
 
-    const handleDeleteLead = (leadId: number) => {
-        setLeadList(leadList.filter((lead) => lead.leadID !== leadId));
+    const handleDeleteLead = async (leadId: number) => {
+        setDeleteError(null);
+        setDeletingLeadId(leadId);
+
+        const leadRepository = new LeadRepo();
+        const error = await leadRepository.deleteLead(leadId);
+
+        setDeletingLeadId(null);
+
+        if (error) {
+            setDeleteError(error);
+            return;
+        }
+
+        setLeadList((currentLeads) =>
+            currentLeads.filter((lead) => lead.leadID !== leadId)
+        );
     };
 
     const handleStatusChange = (leadId: number, newStatus: boolean) => {
@@ -133,6 +151,12 @@ export default function LeadTable({ leads }: LeadTableProps) {
             </div>
 
             <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
+                {deleteError ? (
+                    <div className="border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        {deleteError}
+                    </div>
+                ) : null}
+
                 <table className="w-full text-left text-sm">
                     <thead className="bg-gray-100 text-gray-900">
                     <tr>
@@ -156,6 +180,7 @@ export default function LeadTable({ leads }: LeadTableProps) {
                             onStatusChange={handleStatusChange}
                             onViewBrief={setSelectedLead}
                             onDelete={handleDeleteLead}
+                            deleting={deletingLeadId === lead.leadID}
                         />
 
 

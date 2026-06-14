@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import AgendaCalendar from "@/components/agenda/AgendaCalendar";
@@ -10,34 +10,53 @@ import { AgendaService } from "@/domain/business/AgendaService";
 import { ScoringService } from "@/domain/business/ScoringService";
 import { PriorityManager } from "@/domain/business/PriorityManager";
 
-import { LeadRepo } from "@/lib/persistence/stub/LeadRepo";
-import { TaskRepo } from "@/lib/persistence/stub/TaskRepo";
-
-import { leadStubDB } from "@/tests/stub/LeadStubDB";
-import { taskStubDB } from "@/tests/stub/TaskStubDB";
+import { Lead } from "@/domain/objects/Lead";
+import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
+import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
 
 export default function AgendaPage() {
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+    const [agendaLeads, setAgendaLeads] = useState<Lead[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const agendaLeads = useMemo(() => {
-        const leadRepo = new LeadRepo(leadStubDB);
-        const leads = leadRepo.getAllLeads();
-        const taskRepo = new TaskRepo(taskStubDB);
-        const tasks = taskRepo.getAllTasks();
+    useEffect(() => {
+        let active = true;
 
-        const scoringService = new ScoringService();
-        const priorityManager = new PriorityManager(scoringService);
+        async function loadAgenda() {
+            setLoading(true);
 
-        const agendaService = new AgendaService(
-            scoringService,
-            priorityManager
-        );
+            const leadRepo = new LeadRepo();
+            const taskRepo = new TaskRepo();
+            const [leads, tasks] = await Promise.all([
+                leadRepo.getAllLeads(),
+                taskRepo.getAllTasks(),
+            ]);
 
-        return agendaService.getTodayAgenda(
-            leads,
-            tasks,
-            selectedDate
-        );
+            const scoringService = new ScoringService();
+            const priorityManager = new PriorityManager(scoringService);
+
+            const agendaService = new AgendaService(
+                scoringService,
+                priorityManager
+            );
+
+            if (active) {
+                setAgendaLeads(
+                    agendaService.getTodayAgenda(
+                        leads,
+                        tasks,
+                        selectedDate
+                    )
+                );
+                setLoading(false);
+            }
+        }
+
+        loadAgenda();
+
+        return () => {
+            active = false;
+        };
     }, [selectedDate]);
 
     function changeDate(days: number) {
@@ -83,12 +102,12 @@ export default function AgendaPage() {
             <AgendaCalendar
                 selectedDate={selectedDate}
                 onSelectDate={setSelectedDate}
-                agendaCount={agendaLeads.length}
+                agendaCount={loading ? 0 : agendaLeads.length}
             />
 
             <AgendaActivityPanel
                 selectedDate={selectedDate}
-                agendaLeads={agendaLeads}
+                agendaLeads={loading ? [] : agendaLeads}
             />
         </main>
     );

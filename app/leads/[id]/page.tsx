@@ -4,8 +4,7 @@ import LeadDetailPanel, {
     LeadDetailViewModel,
 } from "@/components/leads/LeadDetailPanel";
 import { Lead } from "@/domain/objects/Lead";
-import { LeadRepo } from "@/lib/persistence/stub/LeadRepo";
-import { leadStubDB } from "@/tests/stub/LeadStubDB";
+import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
 
 interface LeadDetailPageProps {
     params: Promise<{
@@ -53,8 +52,8 @@ export default async function LeadDetailPage({
 }: LeadDetailPageProps) {
     const { id } = await params;
 
-    const leadRepository = new LeadRepo(leadStubDB);
-    const lead = leadRepository.getLeadById(Number(id));
+    const leadRepository = new LeadRepo();
+    const lead = await leadRepository.getLeadById(Number(id));
 
     if (!lead) {
         return (
