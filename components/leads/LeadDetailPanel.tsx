@@ -4,9 +4,12 @@ import { useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import {
+    Bell,
     CalendarClock,
     Car,
     Check,
+    CheckCircle2,
+    Circle,
     Mail,
     MapPin,
     Pencil,
@@ -16,6 +19,27 @@ import {
     UserRound,
     X,
 } from "lucide-react";
+
+import { Lead } from "@/domain/objects/Lead";
+import { Task } from "@/domain/objects/Task";
+import { Vehicle } from "@/domain/objects/Vehicle";
+import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
+import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
+
+export interface LeadDetailTaskViewModel {
+    taskID: number;
+    title: string;
+    date: string;
+    completed: boolean;
+    leadID: number | null;
+}
+
+export interface LeadDetailNotificationViewModel {
+    notificationID: number;
+    title: string;
+    date: string;
+    leadID: number | null;
+}
 
 export interface LeadDetailViewModel {
     leadID: number;
@@ -30,7 +54,9 @@ export interface LeadDetailViewModel {
     leadCountry: string;
     leadPostalCode: string;
     budget: number;
+    vehicleInterestId: number | null;
     vehicleInterest: string;
+    tradeInVehicleId: number | null;
     tradeInVehicle: string;
     stage: string;
     followUpDate: string;
@@ -44,6 +70,8 @@ export interface LeadDetailViewModel {
 
 interface LeadDetailPanelProps {
     lead: LeadDetailViewModel;
+    tasks: LeadDetailTaskViewModel[];
+    notifications: LeadDetailNotificationViewModel[];
 }
 
 const stageOptions = [
@@ -53,6 +81,7 @@ const stageOptions = [
     "TEST_DRIVE",
     "NEGOTIATION",
     "CLOSED",
+    "WORKING",
 ];
 
 const currencyFormatter = new Intl.NumberFormat("en-CA", {
@@ -70,7 +99,70 @@ function formatDisplayDate(value: string) {
         month: "short",
         day: "numeric",
         year: "numeric",
-    }).format(new Date(value));
+    }).format(new Date(`${value}T00:00:00`));
+}
+
+function toDate(value: string) {
+    return value ? new Date(`${value}T00:00:00`) : new Date();
+}
+
+function createVehicleReference(vehicleId: number | null) {
+    if (!vehicleId) {
+        return null;
+    }
+
+    const vehicle = new Vehicle();
+    vehicle.vehicleID = vehicleId;
+    return vehicle;
+}
+
+function createLeadFromViewModel(viewModel: LeadDetailViewModel) {
+    return new Lead({
+        leadID: viewModel.leadID,
+        firstName: viewModel.firstName,
+        lastName: viewModel.lastName,
+        phone: viewModel.phone,
+        leadEmail: viewModel.leadEmail,
+        leadDivision: viewModel.leadDivision,
+        leadAddress: viewModel.leadAddress,
+        leadCity: viewModel.leadCity,
+        leadProvince: viewModel.leadProvince,
+        leadCountry: viewModel.leadCountry,
+        leadPostalCode: viewModel.leadPostalCode,
+        budget: viewModel.budget,
+        vehicleInterest: createVehicleReference(viewModel.vehicleInterestId),
+        tradeInVehicle: createVehicleReference(viewModel.tradeInVehicleId),
+        stage: viewModel.stage,
+        followUpDate: toDate(viewModel.followUpDate),
+        score: viewModel.score,
+        notes: viewModel.notes,
+        createdAt: toDate(viewModel.createdAt),
+        lastInteractionDate: viewModel.lastInteractionDate
+            ? toDate(viewModel.lastInteractionDate)
+            : null,
+        lastInteractionBy: viewModel.lastInteractionBy,
+        status: viewModel.status,
+    });
+}
+
+function createTaskFromViewModel(task: LeadDetailTaskViewModel) {
+    const leadReference =
+        task.leadID === null
+            ? null
+            : new Lead({
+                  leadID: task.leadID,
+                  firstName: `Lead ${task.leadID}`,
+              });
+
+    const nextTask = new Task(
+        leadReference,
+        task.title,
+        toDate(task.date),
+        task.taskID
+    );
+
+    nextTask.setCompleted(task.completed);
+    return nextTask;
 }
 
 function Field({
@@ -95,13 +187,21 @@ function Field({
     );
 }
 
-export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
+export default function LeadDetailPanel({
+    lead,
+    tasks,
+    notifications,
+}: LeadDetailPanelProps) {
     const router = useRouter();
     const [currentLead, setCurrentLead] = useState(lead);
     const [draftLead, setDraftLead] = useState(lead);
+    const [leadTasks, setLeadTasks] = useState(tasks);
     const [isEditing, setIsEditing] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-    const [isDeleted, setIsDeleted] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const fullName = useMemo(
         () => `${currentLead.firstName} ${currentLead.lastName}`.trim(),
@@ -120,57 +220,127 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
         }));
     }
 
-    function handleSave() {
-        setCurrentLead(draftLead);
-        setIsEditing(false);
+    async function handleSave() {
+        setErrorMessage(null);
+        setSaving(true);
+
+        try {
+            const leadRepository = new LeadRepo();
+            const error = await leadRepository.updateLead(
+                createLeadFromViewModel(draftLead)
+            );
+
+            if (error) {
+                setErrorMessage(error);
+                return;
+            }
+
+            setCurrentLead(draftLead);
+            setIsEditing(false);
+            router.refresh();
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error ? error.message : "Failed to save lead."
+            );
+        } finally {
+            setSaving(false);
+        }
     }
 
     function handleCancel() {
         setDraftLead(currentLead);
         setIsEditing(false);
+        setErrorMessage(null);
     }
 
-    function handleDelete() {
-        setIsDeleted(true);
-        setShowDeleteConfirm(false);
+    async function handleDelete() {
+        setErrorMessage(null);
+        setDeleting(true);
+
+        try {
+            const leadRepository = new LeadRepo();
+            const error = await leadRepository.deleteLead(currentLead.leadID);
+
+            if (error) {
+                setErrorMessage(error);
+                return;
+            }
+
+            router.push("/leads");
+            router.refresh();
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error ? error.message : "Failed to delete lead."
+            );
+        } finally {
+            setDeleting(false);
+            setShowDeleteConfirm(false);
+        }
     }
 
-    if (isDeleted) {
-        return (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-6">
-                <h2 className="text-xl font-bold text-red-900">
-                    Lead removed from this view
-                </h2>
-                <p className="mt-2 text-sm text-red-700">
-                    This demo uses in-memory stub data, so the delete action is shown locally.
-                </p>
-                <button
-                    onClick={() => router.push("/leads")}
-                    className="mt-5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-                >
-                    Back to Leads
-                </button>
-            </div>
-        );
+    async function toggleTaskCompletion(taskID: number) {
+        const targetTask = leadTasks.find((task) => task.taskID === taskID);
+
+        if (!targetTask) {
+            return;
+        }
+
+        const nextTask = {
+            ...targetTask,
+            completed: !targetTask.completed,
+        };
+
+        setUpdatingTaskId(taskID);
+        setErrorMessage(null);
+
+        try {
+            const taskRepository = new TaskRepo();
+            const error = await taskRepository.updateTask(
+                createTaskFromViewModel(nextTask)
+            );
+
+            if (error) {
+                setErrorMessage(error);
+                return;
+            }
+
+            setLeadTasks((currentTasks) =>
+                currentTasks.map((task) =>
+                    task.taskID === taskID ? nextTask : task
+                )
+            );
+            router.refresh();
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error ? error.message : "Failed to update task."
+            );
+        } finally {
+            setUpdatingTaskId(null);
+        }
     }
 
     return (
         <div className="space-y-6">
+            {errorMessage ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                    {errorMessage}
+                </div>
+            ) : null}
+
             <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <div className="flex items-center gap-3">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                                <UserRound size={24} />
-                            </div>
-                            <div>
-                                <h2 className="text-2xl font-bold text-slate-950">
-                                    {fullName}
-                                </h2>
-                                <p className="mt-1 text-sm text-slate-500">
-                                    Lead #{currentLead.leadID} - created {formatDisplayDate(currentLead.createdAt)}
-                                </p>
-                            </div>
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                            <UserRound size={24} />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-950">
+                                {fullName || "Unnamed Lead"}
+                            </h2>
+                            <p className="mt-1 text-sm text-slate-500">
+                                Lead #{currentLead.leadID} - created{" "}
+                                {formatDisplayDate(currentLead.createdAt)}
+                            </p>
                         </div>
                     </div>
 
@@ -179,17 +349,19 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                             <>
                                 <button
                                     onClick={handleCancel}
-                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                    disabled={saving}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                     <X size={16} />
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleSave}
-                                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                                    disabled={saving}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
                                 >
                                     <Save size={16} />
-                                    Save Changes
+                                    {saving ? "Saving..." : "Save Changes"}
                                 </button>
                             </>
                         ) : (
@@ -253,7 +425,9 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                             First Name
                             <input
                                 value={draftLead.firstName}
-                                onChange={(event) => updateDraft("firstName", event.target.value)}
+                                onChange={(event) =>
+                                    updateDraft("firstName", event.target.value)
+                                }
                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
                             />
                         </label>
@@ -261,7 +435,9 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                             Last Name
                             <input
                                 value={draftLead.lastName}
-                                onChange={(event) => updateDraft("lastName", event.target.value)}
+                                onChange={(event) =>
+                                    updateDraft("lastName", event.target.value)
+                                }
                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
                             />
                         </label>
@@ -269,7 +445,9 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                             Phone
                             <input
                                 value={draftLead.phone}
-                                onChange={(event) => updateDraft("phone", event.target.value)}
+                                onChange={(event) =>
+                                    updateDraft("phone", event.target.value)
+                                }
                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
                             />
                         </label>
@@ -277,7 +455,9 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                             Email
                             <input
                                 value={draftLead.leadEmail}
-                                onChange={(event) => updateDraft("leadEmail", event.target.value)}
+                                onChange={(event) =>
+                                    updateDraft("leadEmail", event.target.value)
+                                }
                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
                             />
                         </label>
@@ -285,7 +465,9 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                             Stage
                             <select
                                 value={draftLead.stage}
-                                onChange={(event) => updateDraft("stage", event.target.value)}
+                                onChange={(event) =>
+                                    updateDraft("stage", event.target.value)
+                                }
                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
                             >
                                 {stageOptions.map((stage) => (
@@ -299,7 +481,12 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                             Status
                             <select
                                 value={draftLead.status ? "ACTIVE" : "LOST"}
-                                onChange={(event) => updateDraft("status", event.target.value === "ACTIVE")}
+                                onChange={(event) =>
+                                    updateDraft(
+                                        "status",
+                                        event.target.value === "ACTIVE"
+                                    )
+                                }
                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
                             >
                                 <option value="ACTIVE">Active</option>
@@ -311,7 +498,9 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                             <input
                                 type="number"
                                 value={draftLead.budget}
-                                onChange={(event) => updateDraft("budget", Number(event.target.value))}
+                                onChange={(event) =>
+                                    updateDraft("budget", Number(event.target.value))
+                                }
                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
                             />
                         </label>
@@ -322,7 +511,9 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                                 min={0}
                                 max={150}
                                 value={draftLead.score}
-                                onChange={(event) => updateDraft("score", Number(event.target.value))}
+                                onChange={(event) =>
+                                    updateDraft("score", Number(event.target.value))
+                                }
                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
                             />
                         </label>
@@ -331,15 +522,19 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                             <input
                                 type="date"
                                 value={draftLead.followUpDate}
-                                onChange={(event) => updateDraft("followUpDate", event.target.value)}
+                                onChange={(event) =>
+                                    updateDraft("followUpDate", event.target.value)
+                                }
                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
                             />
                         </label>
                         <label className="text-sm font-medium text-slate-700">
-                            City
+                            Division
                             <input
-                                value={draftLead.leadCity}
-                                onChange={(event) => updateDraft("leadCity", event.target.value)}
+                                value={draftLead.leadDivision}
+                                onChange={(event) =>
+                                    updateDraft("leadDivision", event.target.value)
+                                }
                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
                             />
                         </label>
@@ -347,7 +542,52 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                             Address
                             <input
                                 value={draftLead.leadAddress}
-                                onChange={(event) => updateDraft("leadAddress", event.target.value)}
+                                onChange={(event) =>
+                                    updateDraft("leadAddress", event.target.value)
+                                }
+                                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
+                            />
+                        </label>
+                        <label className="text-sm font-medium text-slate-700">
+                            City
+                            <input
+                                value={draftLead.leadCity}
+                                onChange={(event) =>
+                                    updateDraft("leadCity", event.target.value)
+                                }
+                                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
+                            />
+                        </label>
+                        <label className="text-sm font-medium text-slate-700">
+                            Province
+                            <input
+                                value={draftLead.leadProvince}
+                                onChange={(event) =>
+                                    updateDraft("leadProvince", event.target.value)
+                                }
+                                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
+                            />
+                        </label>
+                        <label className="text-sm font-medium text-slate-700">
+                            Postal Code
+                            <input
+                                value={draftLead.leadPostalCode}
+                                onChange={(event) =>
+                                    updateDraft(
+                                        "leadPostalCode",
+                                        event.target.value
+                                    )
+                                }
+                                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
+                            />
+                        </label>
+                        <label className="text-sm font-medium text-slate-700">
+                            Country
+                            <input
+                                value={draftLead.leadCountry}
+                                onChange={(event) =>
+                                    updateDraft("leadCountry", event.target.value)
+                                }
                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
                             />
                         </label>
@@ -355,7 +595,9 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                             Notes
                             <textarea
                                 value={draftLead.notes}
-                                onChange={(event) => updateDraft("notes", event.target.value)}
+                                onChange={(event) =>
+                                    updateDraft("notes", event.target.value)
+                                }
                                 rows={5}
                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
                             />
@@ -363,7 +605,7 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                     </div>
 
                     <p className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
-                        Previewing edits for {draftFullName || "this lead"}. Stub data is in-memory, so saved changes apply to this detail view only.
+                        Saving changes for {draftFullName || "this lead"} will update the Supabase lead record.
                     </p>
                 </section>
             ) : (
@@ -383,6 +625,7 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                                     currentLead.leadCity,
                                     currentLead.leadProvince,
                                     currentLead.leadPostalCode,
+                                    currentLead.leadCountry,
                                 ]
                                     .filter(Boolean)
                                     .join(", ")}
@@ -403,18 +646,20 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
 
                         <div className="mt-5 space-y-4">
                             <Field
-                                label="Vehicle Interest"
-                                value={currentLead.vehicleInterest || "None"}
-                                icon={Car}
-                            />
-                            <Field
-                                label="Trade-in Vehicle"
-                                value={currentLead.tradeInVehicle || "No trade-in"}
-                                icon={Car}
-                            />
-                            <Field
                                 label="Budget"
                                 value={currencyFormatter.format(currentLead.budget)}
+                                icon={CalendarClock}
+                            />
+                            <Field
+                                label="Next Follow-up"
+                                value={formatDisplayDate(currentLead.followUpDate)}
+                                icon={CalendarClock}
+                            />
+                            <Field
+                                label="Last Interaction"
+                                value={formatDisplayDate(
+                                    currentLead.lastInteractionDate
+                                )}
                                 icon={CalendarClock}
                             />
                         </div>
@@ -422,44 +667,138 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                 </section>
             )}
 
-            {!isEditing && (
-                <section className="grid gap-6 xl:grid-cols-[0.75fr_1.25fr]">
-                    <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-slate-950">
-                            Follow-up
-                        </h3>
-                        <div className="mt-5 space-y-3 text-sm">
-                            <div className="flex justify-between gap-4">
-                                <span className="text-slate-500">Next follow-up</span>
-                                <span className="font-semibold text-slate-950">
-                                    {formatDisplayDate(currentLead.followUpDate)}
-                                </span>
-                            </div>
-                            <div className="flex justify-between gap-4">
-                                <span className="text-slate-500">Last interaction</span>
-                                <span className="font-semibold text-slate-950">
-                                    {formatDisplayDate(currentLead.lastInteractionDate)}
-                                </span>
-                            </div>
-                            <div className="flex justify-between gap-4">
-                                <span className="text-slate-500">Interaction by</span>
-                                <span className="font-semibold text-slate-950">
-                                    {currentLead.lastInteractionBy || "N/A"}
-                                </span>
+            {!isEditing ? (
+                <>
+                    <section className="grid gap-6 xl:grid-cols-2">
+                        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-slate-950">
+                                Vehicle Interest
+                            </h3>
+                            <div className="mt-5">
+                                <Field
+                                    label="Selected Vehicle"
+                                    value={
+                                        currentLead.vehicleInterest ||
+                                        "No vehicle information available."
+                                    }
+                                    icon={Car}
+                                />
                             </div>
                         </div>
-                    </div>
 
-                    <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+                        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-slate-950">
+                                Trade-in Vehicle
+                            </h3>
+                            <div className="mt-5">
+                                <Field
+                                    label="Trade-in"
+                                    value={
+                                        currentLead.tradeInVehicle ||
+                                        "No vehicle information available."
+                                    }
+                                    icon={Car}
+                                />
+                            </div>
+                        </div>
+                    </section>
+
+                    <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+                        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-slate-950">
+                                Notes
+                            </h3>
+                            <p className="mt-4 whitespace-pre-line text-sm leading-6 text-slate-700">
+                                {currentLead.notes || "No notes available."}
+                            </p>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-slate-950">
+                                Tasks
+                            </h3>
+
+                            <div className="mt-5 space-y-3">
+                                {leadTasks.map((task) => (
+                                    <div
+                                        key={task.taskID}
+                                        className="flex items-start justify-between gap-4 rounded-lg border border-slate-200 p-4"
+                                    >
+                                        <div>
+                                            <p className="font-semibold text-slate-950">
+                                                {task.title}
+                                            </p>
+                                            <p className="mt-1 text-sm text-slate-500">
+                                                {formatDisplayDate(task.date)}
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            onClick={() =>
+                                                toggleTaskCompletion(task.taskID)
+                                            }
+                                            disabled={updatingTaskId === task.taskID}
+                                            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+                                                task.completed
+                                                    ? "bg-green-50 text-green-700"
+                                                    : "bg-slate-100 text-slate-600"
+                                            }`}
+                                        >
+                                            {task.completed ? (
+                                                <CheckCircle2 size={14} />
+                                            ) : (
+                                                <Circle size={14} />
+                                            )}
+                                            {task.completed
+                                                ? "Completed"
+                                                : "Uncompleted"}
+                                        </button>
+                                    </div>
+                                ))}
+
+                                {leadTasks.length === 0 ? (
+                                    <p className="text-sm text-slate-400">
+                                        No tasks for this lead.
+                                    </p>
+                                ) : null}
+                            </div>
+                        </div>
+                    </section>
+
+                    <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
                         <h3 className="text-lg font-bold text-slate-950">
-                            Notes
+                            Notifications
                         </h3>
-                        <p className="mt-4 whitespace-pre-line text-sm leading-6 text-slate-700">
-                            {currentLead.notes || "No notes available."}
-                        </p>
-                    </div>
-                </section>
-            )}
+
+                        <div className="mt-5 space-y-3">
+                            {notifications.map((notification) => (
+                                <div
+                                    key={notification.notificationID}
+                                    className="flex gap-3 rounded-lg border border-slate-200 p-4"
+                                >
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                                        <Bell size={18} />
+                                    </div>
+                                    <div>
+                                        <p className="font-semibold text-slate-950">
+                                            {notification.title}
+                                        </p>
+                                        <p className="mt-1 text-sm text-slate-500">
+                                            {formatDisplayDate(notification.date)}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+
+                            {notifications.length === 0 ? (
+                                <p className="text-sm text-slate-400">
+                                    No notifications for this lead.
+                                </p>
+                            ) : null}
+                        </div>
+                    </section>
+                </>
+            ) : null}
 
             {showDeleteConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
@@ -468,21 +807,23 @@ export default function LeadDetailPanel({ lead }: LeadDetailPanelProps) {
                             Delete this lead?
                         </h3>
                         <p className="mt-2 text-sm text-slate-600">
-                            This removes {fullName} from the current detail view. Persistent deletion will be connected when the real repository is wired in.
+                            This will permanently delete {fullName || "this lead"} from Supabase.
                         </p>
 
                         <div className="mt-6 flex justify-end gap-3">
                             <button
                                 onClick={() => setShowDeleteConfirm(false)}
-                                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                disabled={deleting}
+                                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleDelete}
-                                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                                disabled={deleting}
+                                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
                             >
-                                Delete Lead
+                                {deleting ? "Deleting..." : "Delete Lead"}
                             </button>
                         </div>
                     </div>

@@ -1,4 +1,5 @@
 import { Lead } from "@/domain/objects/Lead";
+import { Vehicle } from "@/domain/objects/Vehicle";
 import { supabase } from "@/lib/supabase/client";
 
 type LeadRow = {
@@ -40,6 +41,16 @@ function toDate(value: string | null, fallback = new Date()): Date {
     return new Date(value);
 }
 
+function createVehicleReference(vehicleId: number | null): Vehicle | null {
+    if (!vehicleId) {
+        return null;
+    }
+
+    const vehicle = new Vehicle();
+    vehicle.vehicleID = vehicleId;
+    return vehicle;
+}
+
 function mapRowToLead(row: LeadRow): Lead {
     return new Lead({
         leadID: row.lead_id,
@@ -54,8 +65,8 @@ function mapRowToLead(row: LeadRow): Lead {
         leadCountry: row.lead_country ?? "Canada",
         leadPostalCode: row.lead_postal_code ?? "",
         budget: row.budget ?? 0,
-        vehicleInterest: null,
-        tradeInVehicle: null,
+        vehicleInterest: createVehicleReference(row.vehicle_interest_id),
+        tradeInVehicle: createVehicleReference(row.trade_in_vehicle_id),
         stage: row.stage ?? "NEW",
         followUpDate: toDate(row.follow_up_date),
         score: row.score ?? 0,

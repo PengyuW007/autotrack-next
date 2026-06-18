@@ -1,10 +1,17 @@
 import Link from "next/link";
 
 import LeadDetailPanel, {
+    LeadDetailNotificationViewModel,
+    LeadDetailTaskViewModel,
     LeadDetailViewModel,
 } from "@/components/leads/LeadDetailPanel";
 import { Lead } from "@/domain/objects/Lead";
+import { Notification } from "@/domain/objects/Notification";
+import { Task } from "@/domain/objects/Task";
 import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
+import { NotificationRepo } from "@/lib/persistence/real/supabase/NotificationRepo";
+import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
+import { VehicleRepo } from "@/lib/persistence/real/supabase/VehicleRepo";
 
 interface LeadDetailPageProps {
     params: Promise<{
@@ -34,7 +41,9 @@ function toLeadDetailViewModel(lead: Lead): LeadDetailViewModel {
         leadCountry: lead.leadCountry,
         leadPostalCode: lead.leadPostalCode,
         budget: lead.budget,
+        vehicleInterestId: lead.vehicleInterest?.vehicleID ?? null,
         vehicleInterest: lead.vehicleInterest?.getFullDescription() ?? "",
+        tradeInVehicleId: lead.tradeInVehicle?.vehicleID ?? null,
         tradeInVehicle: lead.tradeInVehicle?.getFullDescription() ?? "",
         stage: lead.stage,
         followUpDate: toDateInputValue(lead.followUpDate),
@@ -47,12 +56,37 @@ function toLeadDetailViewModel(lead: Lead): LeadDetailViewModel {
     };
 }
 
+function toTaskViewModel(task: Task): LeadDetailTaskViewModel {
+    return {
+        taskID: task.getEventID(),
+        title: task.getTitle(),
+        date: toDateInputValue(task.getDate()),
+        completed: task.isCompleted(),
+        leadID: task.getLead()?.leadID ?? null,
+    };
+}
+
+function toNotificationViewModel(
+    notification: Notification
+): LeadDetailNotificationViewModel {
+    return {
+        notificationID: notification.getEventID(),
+        title: notification.getTitle(),
+        date: toDateInputValue(notification.getDate()),
+        leadID: notification.getLead()?.leadID ?? null,
+    };
+}
+
 export default async function LeadDetailPage({
     params,
 }: LeadDetailPageProps) {
     const { id } = await params;
 
     const leadRepository = new LeadRepo();
+    const vehicleRepository = new VehicleRepo();
+    const taskRepository = new TaskRepo();
+    const notificationRepository = new NotificationRepo();
+
     const lead = await leadRepository.getLeadById(Number(id));
 
     if (!lead) {
@@ -69,6 +103,28 @@ export default async function LeadDetailPage({
         );
     }
 
+    const [vehicleInterest, tradeInVehicle, allTasks, allNotifications] =
+        await Promise.all([
+            lead.vehicleInterest?.vehicleID
+                ? vehicleRepository.getVehicleById(lead.vehicleInterest.vehicleID)
+                : Promise.resolve(null),
+            lead.tradeInVehicle?.vehicleID
+                ? vehicleRepository.getVehicleById(lead.tradeInVehicle.vehicleID)
+                : Promise.resolve(null),
+            taskRepository.getAllTasks(),
+            notificationRepository.getAllNotifications(),
+        ]);
+
+    lead.vehicleInterest = vehicleInterest;
+    lead.tradeInVehicle = tradeInVehicle;
+
+    const leadTasks = allTasks.filter(
+        (task) => task.getLead()?.leadID === lead.leadID
+    );
+    const leadNotifications = allNotifications.filter(
+        (notification) => notification.getLead()?.leadID === lead.leadID
+    );
+
     return (
         <div>
             <div className="mb-4">
@@ -77,7 +133,11 @@ export default async function LeadDetailPage({
                 </Link>
             </div>
 
-            <LeadDetailPanel lead={toLeadDetailViewModel(lead)} />
+            <LeadDetailPanel
+                lead={toLeadDetailViewModel(lead)}
+                tasks={leadTasks.map(toTaskViewModel)}
+                notifications={leadNotifications.map(toNotificationViewModel)}
+            />
         </div>
     );
 }
