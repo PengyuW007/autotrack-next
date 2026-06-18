@@ -142,6 +142,50 @@ export class AgendaService {
         );
     }
 
+    getSystemAssignedTasks(
+        allLeads: Lead[],
+        existingTasks: Task[],
+        targetDate: Date
+    ): Task[] {
+        const targetDateStr = this.formatDate(targetDate);
+
+        return allLeads
+            .filter(
+                (lead) =>
+                    lead.leadID > 0 &&
+                    lead.followUpDate &&
+                    this.formatDate(lead.followUpDate) === targetDateStr &&
+                    !this.hasTaskForLeadOnDate(
+                        existingTasks,
+                        lead.leadID,
+                        targetDateStr
+                    )
+            )
+            .map((lead) => {
+                const taskDate = new Date(lead.followUpDate);
+                const title =
+                    this.scoringService.getScientificMission(
+                        lead,
+                        taskDate,
+                        []
+                    ) ?? `Follow up with ${lead.getLeadName()}`;
+
+                return new Task(lead, title, taskDate);
+            });
+    }
+
+    private hasTaskForLeadOnDate(
+        tasks: Task[],
+        leadId: number,
+        targetDateStr: string
+    ): boolean {
+        return tasks.some(
+            (task) =>
+                task.getLead()?.leadID === leadId &&
+                this.formatDate(task.getDate()) === targetDateStr
+        );
+    }
+
     private formatDate(date: Date): string {
         const normalizedDate = new Date(date);
         const year = normalizedDate.getFullYear();

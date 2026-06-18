@@ -171,6 +171,28 @@ export class LeadRepo {
         return data.map((row) => mapRowToLead(row as LeadRow));
     }
 
+    async getLeadsByFollowUpDate(targetDate: Date): Promise<Lead[]> {
+        const startOfDay = new Date(targetDate);
+        startOfDay.setHours(0, 0, 0, 0);
+
+        const endOfDay = new Date(startOfDay);
+        endOfDay.setDate(endOfDay.getDate() + 1);
+
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .select("*")
+            .not("follow_up_date", "is", null)
+            .gte("follow_up_date", startOfDay.toISOString())
+            .lt("follow_up_date", endOfDay.toISOString())
+            .order("follow_up_date", { ascending: true });
+
+        if (error || !data) {
+            return [];
+        }
+
+        return data.map((row) => mapRowToLead(row as LeadRow));
+    }
+
     async insertLead(lead: Lead): Promise<string | null> {
         const { data, error } = await supabase
             .from(TABLE_NAME)
