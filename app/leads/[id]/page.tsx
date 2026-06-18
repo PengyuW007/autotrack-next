@@ -27,6 +27,17 @@ function toDateInputValue(date: Date | null | undefined) {
     return date.toISOString().split("T")[0];
 }
 
+function toTimeInputValue(date: Date | null | undefined) {
+    if (!date) {
+        return "";
+    }
+
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+
+    return `${hours}:${minutes}`;
+}
+
 function toLeadDetailViewModel(lead: Lead): LeadDetailViewModel {
     return {
         leadID: lead.leadID,
@@ -61,6 +72,7 @@ function toTaskViewModel(task: Task): LeadDetailTaskViewModel {
         taskID: task.getEventID(),
         title: task.getTitle(),
         date: toDateInputValue(task.getDate()),
+        time: toTimeInputValue(task.getDate()),
         completed: task.isCompleted(),
         leadID: task.getLead()?.leadID ?? null,
     };
@@ -103,7 +115,7 @@ export default async function LeadDetailPage({
         );
     }
 
-    const [vehicleInterest, tradeInVehicle, allTasks, allNotifications] =
+    const [vehicleInterest, tradeInVehicle, leadTasks, leadNotifications] =
         await Promise.all([
             lead.vehicleInterest?.vehicleID
                 ? vehicleRepository.getVehicleById(lead.vehicleInterest.vehicleID)
@@ -111,19 +123,12 @@ export default async function LeadDetailPage({
             lead.tradeInVehicle?.vehicleID
                 ? vehicleRepository.getVehicleById(lead.tradeInVehicle.vehicleID)
                 : Promise.resolve(null),
-            taskRepository.getAllTasks(),
-            notificationRepository.getAllNotifications(),
+            taskRepository.getTasksByLeadId(lead.leadID),
+            notificationRepository.getNotificationsByLeadId(lead.leadID),
         ]);
 
     lead.vehicleInterest = vehicleInterest;
     lead.tradeInVehicle = tradeInVehicle;
-
-    const leadTasks = allTasks.filter(
-        (task) => task.getLead()?.leadID === lead.leadID
-    );
-    const leadNotifications = allNotifications.filter(
-        (notification) => notification.getLead()?.leadID === lead.leadID
-    );
 
     return (
         <div>

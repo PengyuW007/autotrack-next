@@ -79,6 +79,20 @@ export class NotificationRepo {
         return mapRowToNotification(data as NotificationRow);
     }
 
+    async getNotificationsByLeadId(leadId: number): Promise<Notification[]> {
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .select("*")
+            .eq("lead_id", leadId)
+            .order("date", { ascending: false });
+
+        if (error || !data) {
+            return [];
+        }
+
+        return data.map((row) => mapRowToNotification(row as NotificationRow));
+    }
+
     async insertNotification(
         notification: Notification
     ): Promise<string | null> {

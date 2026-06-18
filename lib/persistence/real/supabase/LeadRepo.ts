@@ -140,6 +140,37 @@ export class LeadRepo {
         return mapRowToLead(data as LeadRow);
     }
 
+    async searchLeads(query: string, limit = 8): Promise<Lead[]> {
+        const searchTerm = query.trim();
+
+        if (!searchTerm) {
+            return [];
+        }
+
+        const sanitizedTerm = searchTerm.replaceAll(",", " ");
+        const pattern = `%${sanitizedTerm}%`;
+
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .select("*")
+            .or(
+                [
+                    `first_name.ilike.${pattern}`,
+                    `last_name.ilike.${pattern}`,
+                    `phone.ilike.${pattern}`,
+                    `lead_email.ilike.${pattern}`,
+                ].join(",")
+            )
+            .order("last_name", { ascending: true })
+            .limit(limit);
+
+        if (error || !data) {
+            return [];
+        }
+
+        return data.map((row) => mapRowToLead(row as LeadRow));
+    }
+
     async insertLead(lead: Lead): Promise<string | null> {
         const { data, error } = await supabase
             .from(TABLE_NAME)

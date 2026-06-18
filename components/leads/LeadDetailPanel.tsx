@@ -14,6 +14,7 @@ import {
     MapPin,
     Pencil,
     Phone,
+    PlusCircle,
     Save,
     Trash2,
     UserRound,
@@ -30,6 +31,7 @@ export interface LeadDetailTaskViewModel {
     taskID: number;
     title: string;
     date: string;
+    time: string;
     completed: boolean;
     leadID: number | null;
 }
@@ -106,6 +108,27 @@ function toDate(value: string) {
     return value ? new Date(`${value}T00:00:00`) : new Date();
 }
 
+function toTaskDateTime(date: string, time: string) {
+    const dateValue = date || new Date().toISOString().split("T")[0];
+    const timeValue = time || "09:00";
+
+    return new Date(`${dateValue}T${timeValue}:00`);
+}
+
+function formatTaskDateTime(task: LeadDetailTaskViewModel) {
+    if (!task.date) {
+        return "N/A";
+    }
+
+    return new Intl.DateTimeFormat("en-CA", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+    }).format(toTaskDateTime(task.date, task.time));
+}
+
 function createVehicleReference(vehicleId: number | null) {
     if (!vehicleId) {
         return null;
@@ -157,7 +180,7 @@ function createTaskFromViewModel(task: LeadDetailTaskViewModel) {
     const nextTask = new Task(
         leadReference,
         task.title,
-        toDate(task.date),
+        toTaskDateTime(task.date, task.time),
         task.taskID
     );
 
@@ -200,8 +223,18 @@ export default function LeadDetailPanel({
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [creatingTask, setCreatingTask] = useState(false);
     const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
+    const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [newTaskTitle, setNewTaskTitle] = useState("");
+    const [newTaskDate, setNewTaskDate] = useState(
+        new Date().toISOString().split("T")[0]
+    );
+    const [newTaskTime, setNewTaskTime] = useState("09:00");
+    const [draftTaskTitle, setDraftTaskTitle] = useState("");
+    const [draftTaskDate, setDraftTaskDate] = useState("");
+    const [draftTaskTime, setDraftTaskTime] = useState("");
 
     const fullName = useMemo(
         () => `${currentLead.firstName} ${currentLead.lastName}`.trim(),
@@ -313,6 +346,174 @@ export default function LeadDetailPanel({
         } catch (error) {
             setErrorMessage(
                 error instanceof Error ? error.message : "Failed to update task."
+            );
+        } finally {
+            setUpdatingTaskId(null);
+        }
+    }
+
+    async function handleCreateTask() {
+        const title = newTaskTitle.trim();
+
+        if (!title) {
+            setErrorMessage("Task title is required.");
+            return;
+        }
+
+        if (!newTaskDate) {
+            setErrorMessage("Task date is required.");
+            return;
+        }
+
+        if (!newTaskTime) {
+            setErrorMessage("Task time is required.");
+            return;
+        }
+
+        setCreatingTask(true);
+        setErrorMessage(null);
+
+        const taskViewModel: LeadDetailTaskViewModel = {
+            taskID: -1,
+            title,
+            date: newTaskDate,
+            time: newTaskTime,
+            completed: false,
+            leadID: currentLead.leadID,
+        };
+
+        const task = createTaskFromViewModel(taskViewModel);
+
+        try {
+            const taskRepository = new TaskRepo();
+            const error = await taskRepository.insertTask(task);
+
+            if (error) {
+                setErrorMessage(error);
+                return;
+            }
+
+            setLeadTasks((currentTasks) => [
+                ...currentTasks,
+                {
+                    ...taskViewModel,
+                    taskID: task.getEventID(),
+                },
+            ]);
+            setNewTaskTitle("");
+            setNewTaskDate(new Date().toISOString().split("T")[0]);
+            setNewTaskTime("09:00");
+            router.refresh();
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error ? error.message : "Failed to create task."
+            );
+        } finally {
+            setCreatingTask(false);
+        }
+    }
+
+    function startEditingTask(task: LeadDetailTaskViewModel) {
+        setEditingTaskId(task.taskID);
+        setDraftTaskTitle(task.title);
+        setDraftTaskDate(task.date);
+        setDraftTaskTime(task.time || "09:00");
+        setErrorMessage(null);
+    }
+
+    function cancelEditingTask() {
+        setEditingTaskId(null);
+        setDraftTaskTitle("");
+        setDraftTaskDate("");
+        setDraftTaskTime("");
+        setErrorMessage(null);
+    }
+
+    async function handleSaveTask(taskID: number) {
+        const targetTask = leadTasks.find((task) => task.taskID === taskID);
+        const title = draftTaskTitle.trim();
+
+        if (!targetTask) {
+            return;
+        }
+
+        if (!title) {
+            setErrorMessage("Task title is required.");
+            return;
+        }
+
+        if (!draftTaskDate) {
+            setErrorMessage("Task date is required.");
+            return;
+        }
+
+        if (!draftTaskTime) {
+            setErrorMessage("Task time is required.");
+            return;
+        }
+
+        const nextTask = {
+            ...targetTask,
+            title,
+            date: draftTaskDate,
+            time: draftTaskTime,
+        };
+
+        setUpdatingTaskId(taskID);
+        setErrorMessage(null);
+
+        try {
+            const taskRepository = new TaskRepo();
+            const error = await taskRepository.updateTask(
+                createTaskFromViewModel(nextTask)
+            );
+
+            if (error) {
+                setErrorMessage(error);
+                return;
+            }
+
+            setLeadTasks((currentTasks) =>
+                currentTasks.map((task) =>
+                    task.taskID === taskID ? nextTask : task
+                )
+            );
+            cancelEditingTask();
+            router.refresh();
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error ? error.message : "Failed to update task."
+            );
+        } finally {
+            setUpdatingTaskId(null);
+        }
+    }
+
+    async function handleDeleteTask(taskID: number) {
+        setUpdatingTaskId(taskID);
+        setErrorMessage(null);
+
+        try {
+            const taskRepository = new TaskRepo();
+            const error = await taskRepository.deleteTask(taskID);
+
+            if (error) {
+                setErrorMessage(error);
+                return;
+            }
+
+            setLeadTasks((currentTasks) =>
+                currentTasks.filter((task) => task.taskID !== taskID)
+            );
+
+            if (editingTaskId === taskID) {
+                cancelEditingTask();
+            }
+
+            router.refresh();
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error ? error.message : "Failed to delete task."
             );
         } finally {
             setUpdatingTaskId(null);
@@ -718,43 +919,180 @@ export default function LeadDetailPanel({
                                 Tasks
                             </h3>
 
-                            <div className="mt-5 space-y-3">
-                                {leadTasks.map((task) => (
-                                    <div
-                                        key={task.taskID}
-                                        className="flex items-start justify-between gap-4 rounded-lg border border-slate-200 p-4"
+                            <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                <p className="text-sm font-semibold text-slate-950">
+                                    Add Task for This Lead
+                                </p>
+                                <div className="mt-3 grid gap-3 md:grid-cols-[1fr_150px_120px_auto]">
+                                    <input
+                                        value={newTaskTitle}
+                                        onChange={(event) =>
+                                            setNewTaskTitle(event.target.value)
+                                        }
+                                        placeholder="Task title"
+                                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
+                                    />
+                                    <input
+                                        type="date"
+                                        value={newTaskDate}
+                                        onChange={(event) =>
+                                            setNewTaskDate(event.target.value)
+                                        }
+                                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
+                                    />
+                                    <input
+                                        type="time"
+                                        value={newTaskTime}
+                                        onChange={(event) =>
+                                            setNewTaskTime(event.target.value)
+                                        }
+                                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
+                                    />
+                                    <button
+                                        onClick={handleCreateTask}
+                                        disabled={creatingTask}
+                                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
                                     >
-                                        <div>
-                                            <p className="font-semibold text-slate-950">
-                                                {task.title}
-                                            </p>
-                                            <p className="mt-1 text-sm text-slate-500">
-                                                {formatDisplayDate(task.date)}
-                                            </p>
-                                        </div>
+                                        <PlusCircle size={16} />
+                                        {creatingTask ? "Adding..." : "Add"}
+                                    </button>
+                                </div>
+                            </div>
 
-                                        <button
-                                            onClick={() =>
-                                                toggleTaskCompletion(task.taskID)
-                                            }
-                                            disabled={updatingTaskId === task.taskID}
-                                            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
-                                                task.completed
-                                                    ? "bg-green-50 text-green-700"
-                                                    : "bg-slate-100 text-slate-600"
-                                            }`}
+                            <div className="mt-5 space-y-3">
+                                {leadTasks.map((task) => {
+                                    const isTaskEditing =
+                                        editingTaskId === task.taskID;
+                                    const isTaskUpdating =
+                                        updatingTaskId === task.taskID;
+
+                                    return (
+                                        <div
+                                            key={task.taskID}
+                                            className="rounded-lg border border-slate-200 p-4"
                                         >
-                                            {task.completed ? (
-                                                <CheckCircle2 size={14} />
+                                            {isTaskEditing ? (
+                                                <div className="space-y-3">
+                                                    <input
+                                                        value={draftTaskTitle}
+                                                        onChange={(event) =>
+                                                            setDraftTaskTitle(
+                                                                event.target.value
+                                                            )
+                                                        }
+                                                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
+                                                    />
+                                                    <div className="grid gap-3 md:grid-cols-[1fr_1fr]">
+                                                        <input
+                                                            type="date"
+                                                            value={draftTaskDate}
+                                                            onChange={(event) =>
+                                                                setDraftTaskDate(
+                                                                    event.target.value
+                                                                )
+                                                            }
+                                                            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
+                                                        />
+                                                        <input
+                                                            type="time"
+                                                            value={draftTaskTime}
+                                                            onChange={(event) =>
+                                                                setDraftTaskTime(
+                                                                    event.target.value
+                                                                )
+                                                            }
+                                                            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-wrap justify-end gap-2">
+                                                        <button
+                                                            onClick={cancelEditingTask}
+                                                            disabled={isTaskUpdating}
+                                                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                                        >
+                                                            <X size={15} />
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            onClick={() =>
+                                                                handleSaveTask(
+                                                                    task.taskID
+                                                                )
+                                                            }
+                                                            disabled={isTaskUpdating}
+                                                            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                                                        >
+                                                            <Save size={15} />
+                                                            {isTaskUpdating
+                                                                ? "Saving..."
+                                                                : "Save"}
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             ) : (
-                                                <Circle size={14} />
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div>
+                                                        <p className="font-semibold text-slate-950">
+                                                            {task.title}
+                                                        </p>
+                                                        <p className="mt-1 text-sm text-slate-500">
+                                                            {formatTaskDateTime(task)}
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="flex flex-wrap items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={() =>
+                                                                toggleTaskCompletion(
+                                                                    task.taskID
+                                                                )
+                                                            }
+                                                            disabled={isTaskUpdating}
+                                                            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+                                                                task.completed
+                                                                    ? "bg-green-50 text-green-700"
+                                                                    : "bg-slate-100 text-slate-600"
+                                                            }`}
+                                                        >
+                                                            {task.completed ? (
+                                                                <CheckCircle2
+                                                                    size={14}
+                                                                />
+                                                            ) : (
+                                                                <Circle size={14} />
+                                                            )}
+                                                            {task.completed
+                                                                ? "Completed"
+                                                                : "Uncompleted"}
+                                                        </button>
+                                                        <button
+                                                            onClick={() =>
+                                                                startEditingTask(task)
+                                                            }
+                                                            disabled={isTaskUpdating}
+                                                            className="text-blue-600 hover:text-blue-800 disabled:cursor-not-allowed disabled:text-slate-300"
+                                                            title="Edit task"
+                                                        >
+                                                            <Pencil size={17} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() =>
+                                                                handleDeleteTask(
+                                                                    task.taskID
+                                                                )
+                                                            }
+                                                            disabled={isTaskUpdating}
+                                                            className="text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:text-slate-300"
+                                                            title="Delete task"
+                                                        >
+                                                            <Trash2 size={17} />
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             )}
-                                            {task.completed
-                                                ? "Completed"
-                                                : "Uncompleted"}
-                                        </button>
-                                    </div>
-                                ))}
+                                        </div>
+                                    );
+                                })}
 
                                 {leadTasks.length === 0 ? (
                                     <p className="text-sm text-slate-400">

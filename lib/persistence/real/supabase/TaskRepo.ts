@@ -40,8 +40,10 @@ function mapRowToTask(row: TaskRow): Task {
 }
 
 function mapTaskToRow(task: Task): TaskInsertRow {
+    const leadId = task.getLead()?.leadID ?? null;
+
     const row: TaskInsertRow = {
-        lead_id: task.getLead()?.leadID ?? null,
+        lead_id: leadId,
         title: task.getTitle(),
         date: task.getDate().toISOString(),
         completed: task.isCompleted(),
@@ -82,7 +84,25 @@ export class TaskRepo {
         return mapRowToTask(data as TaskRow);
     }
 
+    async getTasksByLeadId(leadId: number): Promise<Task[]> {
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .select("*")
+            .eq("lead_id", leadId)
+            .order("date", { ascending: true });
+
+        if (error || !data) {
+            return [];
+        }
+
+        return data.map((row) => mapRowToTask(row as TaskRow));
+    }
+
     async insertTask(task: Task): Promise<string | null> {
+        if (!task.getLead()?.leadID) {
+            return "Task must be associated with a lead.";
+        }
+
         const { data, error } = await supabase
             .from(TABLE_NAME)
             .insert(mapTaskToRow(task))
@@ -101,6 +121,10 @@ export class TaskRepo {
     }
 
     async updateTask(task: Task): Promise<string | null> {
+        if (!task.getLead()?.leadID) {
+            return "Task must be associated with a lead.";
+        }
+
         const existingTask = await this.getTaskById(task.getEventID());
 
         if (!existingTask) {
