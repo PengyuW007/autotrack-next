@@ -1,6 +1,12 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import {
+    type FormEvent,
+    type PointerEvent,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import { Plus, X } from "lucide-react";
 
 import { Lead } from "@/domain/objects/Lead";
@@ -25,6 +31,13 @@ export default function LeadTable({ leads }: LeadTableProps) {
     const [createOpen, setCreateOpen] = useState(false);
     const [creatingLead, setCreatingLead] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
+    const [fabPosition, setFabPosition] = useState<{
+        x: number;
+        y: number;
+    } | null>(null);
+    const dragOffsetRef = useRef({ x: 0, y: 0 });
+    const dragStartRef = useRef({ x: 0, y: 0 });
+    const draggedRef = useRef(false);
     const [newLead, setNewLead] = useState({
         firstName: "",
         lastName: "",
@@ -123,44 +136,141 @@ export default function LeadTable({ leads }: LeadTableProps) {
         setLeadList([...updatedLeads]);
     };
 
-    const filteredLeads = leadList.filter((lead) => {
-        const keyword = searchText.toLowerCase();
+    const hasActiveFilters =
+        searchText.trim() !== "" ||
+        statusFilter !== "ALL" ||
+        stageFilter !== "ALL" ||
+        tradeInFilter !== "ALL" ||
+        scoreFilter !== "ALL";
 
-        const matchesSearch =
-            lead.getLeadName().toLowerCase().includes(keyword) ||
-            lead.phone.toLowerCase().includes(keyword) ||
-            lead.leadEmail.toLowerCase().includes(keyword);
+    const filteredLeads = useMemo(() => {
+        if (!hasActiveFilters) {
+            return leadList;
+        }
 
-        const matchesStatus =
-            statusFilter === "ALL" ||
-            (statusFilter === "ACTIVE" && lead.status) ||
-            (statusFilter === "LOST" && !lead.status);
+        const keyword = searchText.trim().toLowerCase();
 
-        const matchesStage =
-            stageFilter === "ALL" ||
-            lead.stage.toUpperCase() === stageFilter;
+        return leadList.filter((lead) => {
+            const matchesSearch =
+                keyword === "" ||
+                lead.getLeadName().toLowerCase().includes(keyword) ||
+                lead.phone.toLowerCase().includes(keyword) ||
+                lead.leadEmail.toLowerCase().includes(keyword);
 
-        const hasTradeIn = lead.tradeInVehicle !== null;
+            const matchesStatus =
+                statusFilter === "ALL" ||
+                (statusFilter === "ACTIVE" && lead.status) ||
+                (statusFilter === "LOST" && !lead.status);
 
-        const matchesTradeIn =
-            tradeInFilter === "ALL" ||
-            (tradeInFilter === "YES" && hasTradeIn) ||
-            (tradeInFilter === "NO" && !hasTradeIn);
+            const matchesStage =
+                stageFilter === "ALL" ||
+                lead.stage.toUpperCase() === stageFilter;
 
-        const matchesScore =
-            scoreFilter === "ALL" ||
-            (scoreFilter === "BELOW_50" && lead.score < 50) ||
-            (scoreFilter === "BETWEEN_50_79" && lead.score >= 50 && lead.score <= 79) ||
-            (scoreFilter === "ABOVE_80" && lead.score >= 80);
+            const hasTradeIn = lead.tradeInVehicle !== null;
 
-        return (
-            matchesSearch &&
-            matchesStatus &&
-            matchesStage &&
-            matchesTradeIn &&
-            matchesScore
+            const matchesTradeIn =
+                tradeInFilter === "ALL" ||
+                (tradeInFilter === "YES" && hasTradeIn) ||
+                (tradeInFilter === "NO" && !hasTradeIn);
+
+            const matchesScore =
+                scoreFilter === "ALL" ||
+                (scoreFilter === "BELOW_50" && lead.score < 50) ||
+                (scoreFilter === "BETWEEN_50_79" &&
+                    lead.score >= 50 &&
+                    lead.score <= 79) ||
+                (scoreFilter === "ABOVE_80" && lead.score >= 80);
+
+            return (
+                matchesSearch &&
+                matchesStatus &&
+                matchesStage &&
+                matchesTradeIn &&
+                matchesScore
+            );
+        });
+    }, [
+        hasActiveFilters,
+        leadList,
+        scoreFilter,
+        searchText,
+        stageFilter,
+        statusFilter,
+        tradeInFilter,
+    ]);
+
+    function clearFilters() {
+        setSearchText("");
+        setStatusFilter("ALL");
+        setStageFilter("ALL");
+        setTradeInFilter("ALL");
+        setScoreFilter("ALL");
+    }
+
+    function clampFabPosition(x: number, y: number, width: number, height: number) {
+        const margin = 16;
+
+        return {
+            x: Math.min(Math.max(margin, x), window.innerWidth - width - margin),
+            y: Math.min(Math.max(margin, y), window.innerHeight - height - margin),
+        };
+    }
+
+    function handleFabPointerDown(event: PointerEvent<HTMLButtonElement>) {
+        const rect = event.currentTarget.getBoundingClientRect();
+
+        dragOffsetRef.current = {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top,
+        };
+        dragStartRef.current = {
+            x: event.clientX,
+            y: event.clientY,
+        };
+        draggedRef.current = false;
+
+        setFabPosition({ x: rect.left, y: rect.top });
+        event.currentTarget.setPointerCapture(event.pointerId);
+    }
+
+    function handleFabPointerMove(event: PointerEvent<HTMLButtonElement>) {
+        if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+            return;
+        }
+
+        const rect = event.currentTarget.getBoundingClientRect();
+        const deltaX = Math.abs(event.clientX - dragStartRef.current.x);
+        const deltaY = Math.abs(event.clientY - dragStartRef.current.y);
+
+        if (deltaX > 4 || deltaY > 4) {
+            draggedRef.current = true;
+        }
+
+        setFabPosition(
+            clampFabPosition(
+                event.clientX - dragOffsetRef.current.x,
+                event.clientY - dragOffsetRef.current.y,
+                rect.width,
+                rect.height
+            )
         );
-    });
+    }
+
+    function handleFabPointerUp(event: PointerEvent<HTMLButtonElement>) {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+    }
+
+    function handleFabClick() {
+        if (draggedRef.current) {
+            draggedRef.current = false;
+            return;
+        }
+
+        setCreateOpen(true);
+        setCreateError(null);
+    }
 
     return (
         <div>
@@ -219,16 +329,29 @@ export default function LeadTable({ leads }: LeadTableProps) {
                         <option value="ABOVE_80">80+</option>
                     </select>
 
-                    <button
-                        onClick={() => {
-                            setCreateOpen(true);
-                            setCreateError(null);
-                        }}
-                        className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
-                    >
-                        <Plus size={16} />
-                        New Lead
-                    </button>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <p className="text-slate-600">
+                        Showing{" "}
+                        <span className="font-semibold text-slate-950">
+                            {filteredLeads.length}
+                        </span>{" "}
+                        of{" "}
+                        <span className="font-semibold text-slate-950">
+                            {leadList.length}
+                        </span>{" "}
+                        leads
+                    </p>
+
+                    {hasActiveFilters ? (
+                        <button
+                            onClick={clearFilters}
+                            className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                            Clear Filters
+                        </button>
+                    ) : null}
                 </div>
             </div>
 
@@ -267,6 +390,17 @@ export default function LeadTable({ leads }: LeadTableProps) {
 
 
                     ))}
+
+                    {filteredLeads.length === 0 ? (
+                        <tr>
+                            <td
+                                colSpan={9}
+                                className="px-4 py-10 text-center text-sm text-slate-500"
+                            >
+                                No leads match the selected filters.
+                            </td>
+                        </tr>
+                    ) : null}
                     </tbody>
                 </table>
             </div>
@@ -275,6 +409,30 @@ export default function LeadTable({ leads }: LeadTableProps) {
                 lead={selectedLead}
                 onClose={() => setSelectedLead(null)}
             />
+
+            <button
+                onClick={handleFabClick}
+                onPointerDown={handleFabPointerDown}
+                onPointerMove={handleFabPointerMove}
+                onPointerUp={handleFabPointerUp}
+                onPointerCancel={handleFabPointerUp}
+                style={
+                    fabPosition
+                        ? {
+                              left: fabPosition.x,
+                              top: fabPosition.y,
+                          }
+                        : undefined
+                }
+                className={`fixed z-40 inline-flex touch-none select-none items-center gap-2 rounded-full bg-blue-600 px-5 py-4 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 ${
+                    fabPosition ? "" : "bottom-6 right-6"
+                } cursor-grab active:cursor-grabbing`}
+                aria-label="Create new lead"
+                title="Drag to move, click to create new lead"
+            >
+                <Plus size={20} />
+                <span className="hidden sm:inline">New Lead</span>
+            </button>
 
             {createOpen ? (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
