@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
+import { Plus, X } from "lucide-react";
+
 import { Lead } from "@/domain/objects/Lead";
 import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
 import LeadTableRow from "./LeadTableRow";
@@ -20,6 +22,75 @@ export default function LeadTable({ leads }: LeadTableProps) {
     const [scoreFilter, setScoreFilter] = useState("ALL");
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [deletingLeadId, setDeletingLeadId] = useState<number | null>(null);
+    const [createOpen, setCreateOpen] = useState(false);
+    const [creatingLead, setCreatingLead] = useState(false);
+    const [createError, setCreateError] = useState<string | null>(null);
+    const [newLead, setNewLead] = useState({
+        firstName: "",
+        lastName: "",
+        phone: "",
+        leadEmail: "",
+        stage: "NEW",
+        budget: "",
+        followUpDate: new Date().toISOString().split("T")[0],
+        notes: "",
+    });
+
+    function updateNewLead(field: keyof typeof newLead, value: string) {
+        setNewLead((currentLead) => ({
+            ...currentLead,
+            [field]: value,
+        }));
+        setCreateError(null);
+    }
+
+    async function handleCreateLead(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+
+        if (!newLead.firstName.trim() && !newLead.lastName.trim()) {
+            setCreateError("Lead must have at least a first name or last name.");
+            return;
+        }
+
+        setCreatingLead(true);
+        setCreateError(null);
+
+        const lead = new Lead({
+            firstName: newLead.firstName,
+            lastName: newLead.lastName,
+            phone: newLead.phone,
+            leadEmail: newLead.leadEmail,
+            stage: newLead.stage,
+            budget: Number(newLead.budget) || 0,
+            followUpDate: new Date(`${newLead.followUpDate}T09:00:00`),
+            notes: newLead.notes,
+            createdAt: new Date(),
+            status: true,
+        });
+
+        const leadRepository = new LeadRepo();
+        const error = await leadRepository.insertLead(lead);
+
+        setCreatingLead(false);
+
+        if (error) {
+            setCreateError(error);
+            return;
+        }
+
+        setLeadList((currentLeads) => [...currentLeads, lead]);
+        setNewLead({
+            firstName: "",
+            lastName: "",
+            phone: "",
+            leadEmail: "",
+            stage: "NEW",
+            budget: "",
+            followUpDate: new Date().toISOString().split("T")[0],
+            notes: "",
+        });
+        setCreateOpen(false);
+    }
 
     const handleDeleteLead = async (leadId: number) => {
         setDeleteError(null);
@@ -94,7 +165,7 @@ export default function LeadTable({ leads }: LeadTableProps) {
     return (
         <div>
             <div className="mb-8 rounded-lg border bg-white p-6 shadow-sm">
-                <div className="flex flex-wrap gap-6">
+                <div className="flex flex-wrap items-center gap-6">
                     <input
                         type="text"
                         placeholder="Search by name, email, or phone."
@@ -147,6 +218,17 @@ export default function LeadTable({ leads }: LeadTableProps) {
                         <option value="BETWEEN_50_79">50 - 79</option>
                         <option value="ABOVE_80">80+</option>
                     </select>
+
+                    <button
+                        onClick={() => {
+                            setCreateOpen(true);
+                            setCreateError(null);
+                        }}
+                        className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+                    >
+                        <Plus size={16} />
+                        New Lead
+                    </button>
                 </div>
             </div>
 
@@ -193,6 +275,161 @@ export default function LeadTable({ leads }: LeadTableProps) {
                 lead={selectedLead}
                 onClose={() => setSelectedLead(null)}
             />
+
+            {createOpen ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                    <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-lg">
+                        <div className="mb-5 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-900">
+                                    Create Lead
+                                </h2>
+                                <p className="text-sm text-gray-500">
+                                    Add a customer record to the lead pipeline.
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={() => setCreateOpen(false)}
+                                className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                                aria-label="Close create lead"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleCreateLead} className="space-y-4">
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <label className="text-sm font-medium text-gray-700">
+                                    First Name
+                                    <input
+                                        value={newLead.firstName}
+                                        onChange={(event) =>
+                                            updateNewLead("firstName", event.target.value)
+                                        }
+                                        className="mt-1 w-full rounded-lg border px-3 py-2 text-gray-900"
+                                    />
+                                </label>
+
+                                <label className="text-sm font-medium text-gray-700">
+                                    Last Name
+                                    <input
+                                        value={newLead.lastName}
+                                        onChange={(event) =>
+                                            updateNewLead("lastName", event.target.value)
+                                        }
+                                        className="mt-1 w-full rounded-lg border px-3 py-2 text-gray-900"
+                                    />
+                                </label>
+
+                                <label className="text-sm font-medium text-gray-700">
+                                    Phone
+                                    <input
+                                        value={newLead.phone}
+                                        onChange={(event) =>
+                                            updateNewLead("phone", event.target.value)
+                                        }
+                                        className="mt-1 w-full rounded-lg border px-3 py-2 text-gray-900"
+                                    />
+                                </label>
+
+                                <label className="text-sm font-medium text-gray-700">
+                                    Email
+                                    <input
+                                        type="email"
+                                        value={newLead.leadEmail}
+                                        onChange={(event) =>
+                                            updateNewLead("leadEmail", event.target.value)
+                                        }
+                                        className="mt-1 w-full rounded-lg border px-3 py-2 text-gray-900"
+                                    />
+                                </label>
+
+                                <label className="text-sm font-medium text-gray-700">
+                                    Stage
+                                    <select
+                                        value={newLead.stage}
+                                        onChange={(event) =>
+                                            updateNewLead("stage", event.target.value)
+                                        }
+                                        className="mt-1 w-full rounded-lg border px-3 py-2 text-gray-900"
+                                    >
+                                        <option value="NEW">New</option>
+                                        <option value="CONTACTED">Contacted</option>
+                                        <option value="VISITED">Visited</option>
+                                        <option value="TEST_DRIVE">Test Drive</option>
+                                        <option value="NEGOTIATION">Negotiation</option>
+                                        <option value="CLOSED">Closed</option>
+                                    </select>
+                                </label>
+
+                                <label className="text-sm font-medium text-gray-700">
+                                    Budget
+                                    <input
+                                        type="number"
+                                        value={newLead.budget}
+                                        onChange={(event) =>
+                                            updateNewLead("budget", event.target.value)
+                                        }
+                                        className="mt-1 w-full rounded-lg border px-3 py-2 text-gray-900"
+                                    />
+                                </label>
+
+                                <label className="text-sm font-medium text-gray-700">
+                                    Follow-up Date
+                                    <input
+                                        type="date"
+                                        value={newLead.followUpDate}
+                                        onChange={(event) =>
+                                            updateNewLead(
+                                                "followUpDate",
+                                                event.target.value
+                                            )
+                                        }
+                                        className="mt-1 w-full rounded-lg border px-3 py-2 text-gray-900"
+                                    />
+                                </label>
+                            </div>
+
+                            <label className="block text-sm font-medium text-gray-700">
+                                Notes
+                                <textarea
+                                    value={newLead.notes}
+                                    onChange={(event) =>
+                                        updateNewLead("notes", event.target.value)
+                                    }
+                                    rows={3}
+                                    className="mt-1 w-full rounded-lg border px-3 py-2 text-gray-900"
+                                />
+                            </label>
+
+                            {createError ? (
+                                <p className="text-sm font-medium text-red-600">
+                                    {createError}
+                                </p>
+                            ) : null}
+
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setCreateOpen(false)}
+                                    className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    Cancel
+                                </button>
+
+                                <button
+                                    type="submit"
+                                    disabled={creatingLead}
+                                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                >
+                                    {creatingLead ? "Creating..." : "Create Lead"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "seed:demo-leads": "node --env-file=.env.local scripts/reset-demo-leads.mjs",
     "test": "jest",
     "test:watch": "jest --watch"
   },
