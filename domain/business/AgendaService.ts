@@ -1,7 +1,20 @@
 import { Lead } from "@/domain/objects/Lead";
+import { Notification } from "@/domain/objects/Notification";
 import { Task } from "@/domain/objects/Task";
 import { ScoringService } from "@/domain/business/ScoringService";
 import { PriorityManager } from "@/domain/business/PriorityManager";
+
+export type AgendaActivityType = "TASK" | "NOTIFICATION";
+
+export type AgendaActivity = {
+    id: number;
+    type: AgendaActivityType;
+    title: string;
+    date: Date;
+    leadId: number | null;
+    leadName: string;
+    completed: boolean | null;
+};
 
 export class AgendaService {
     private scoringService: ScoringService;
@@ -79,6 +92,54 @@ export class AgendaService {
         }
 
         return this.priorityManager.getPrioritizedList([...agendaMap.values()]);
+    }
+
+    getDailyActivities(
+        allTasks: Task[],
+        allNotifications: Notification[],
+        targetDate: Date
+    ): AgendaActivity[] {
+        const targetDateStr = this.formatDate(targetDate);
+
+        const taskActivities = allTasks
+            .filter((task) => this.formatDate(task.getDate()) === targetDateStr)
+            .map((task): AgendaActivity => {
+                const lead = task.getLead();
+
+                return {
+                    id: task.getEventID(),
+                    type: "TASK",
+                    title: task.getTitle(),
+                    date: task.getDate(),
+                    leadId: lead?.leadID ?? null,
+                    leadName: lead?.getLeadName() ?? "No lead assigned",
+                    completed: task.isCompleted(),
+                };
+            });
+
+        const notificationActivities = allNotifications
+            .filter(
+                (notification) =>
+                    this.formatDate(notification.getDate()) === targetDateStr
+            )
+            .map((notification): AgendaActivity => {
+                const lead = notification.getLead();
+
+                return {
+                    id: notification.getEventID(),
+                    type: "NOTIFICATION",
+                    title: notification.getTitle(),
+                    date: notification.getDate(),
+                    leadId: lead?.leadID ?? null,
+                    leadName: lead?.getLeadName() ?? "No lead assigned",
+                    completed: null,
+                };
+            });
+
+        return [...taskActivities, ...notificationActivities].sort(
+            (activityA, activityB) =>
+                activityA.date.getTime() - activityB.date.getTime()
+        );
     }
 
     private formatDate(date: Date): string {

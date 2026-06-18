@@ -6,17 +6,19 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import AgendaCalendar from "@/components/agenda/AgendaCalendar";
 import AgendaActivityPanel from "@/components/agenda/AgendaActivityPanel";
 
-import { AgendaService } from "@/domain/business/AgendaService";
+import {
+    AgendaActivity,
+    AgendaService,
+} from "@/domain/business/AgendaService";
 import { ScoringService } from "@/domain/business/ScoringService";
 import { PriorityManager } from "@/domain/business/PriorityManager";
 
-import { Lead } from "@/domain/objects/Lead";
-import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
+import { NotificationRepo } from "@/lib/persistence/real/supabase/NotificationRepo";
 import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
 
 export default function AgendaPage() {
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-    const [agendaLeads, setAgendaLeads] = useState<Lead[]>([]);
+    const [agendaActivities, setAgendaActivities] = useState<AgendaActivity[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -25,11 +27,11 @@ export default function AgendaPage() {
         async function loadAgenda() {
             setLoading(true);
 
-            const leadRepo = new LeadRepo();
             const taskRepo = new TaskRepo();
-            const [leads, tasks] = await Promise.all([
-                leadRepo.getAllLeads(),
+            const notificationRepo = new NotificationRepo();
+            const [tasks, notifications] = await Promise.all([
                 taskRepo.getAllTasks(),
+                notificationRepo.getAllNotifications(),
             ]);
 
             const scoringService = new ScoringService();
@@ -41,10 +43,10 @@ export default function AgendaPage() {
             );
 
             if (active) {
-                setAgendaLeads(
-                    agendaService.getTodayAgenda(
-                        leads,
+                setAgendaActivities(
+                    agendaService.getDailyActivities(
                         tasks,
+                        notifications,
                         selectedDate
                     )
                 );
@@ -102,12 +104,13 @@ export default function AgendaPage() {
             <AgendaCalendar
                 selectedDate={selectedDate}
                 onSelectDate={setSelectedDate}
-                agendaCount={loading ? 0 : agendaLeads.length}
+                agendaCount={loading ? 0 : agendaActivities.length}
             />
 
             <AgendaActivityPanel
                 selectedDate={selectedDate}
-                agendaLeads={loading ? [] : agendaLeads}
+                agendaActivities={loading ? [] : agendaActivities}
+                loading={loading}
             />
         </main>
     );
