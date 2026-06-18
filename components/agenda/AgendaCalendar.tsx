@@ -48,7 +48,7 @@ export default function AgendaCalendar({
                 </button>
 
                 <h2 className="text-lg font-semibold">
-                    {selectedDate.toLocaleString("default", {
+                    {selectedDate.toLocaleString("en-CA", {
                         month: "long",
                         year: "numeric",
                     })}
