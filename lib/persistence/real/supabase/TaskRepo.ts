@@ -6,7 +6,7 @@ type TaskRow = {
     task_id: number;
     lead_id: number | null;
     title: string | null;
-    date: string | null;
+    task_date: string | null;
     completed: boolean | null;
 };
 
@@ -31,7 +31,7 @@ function mapRowToTask(row: TaskRow): Task {
     const task = new Task(
         createLeadReference(row.lead_id),
         row.title ?? "",
-        row.date ? new Date(row.date) : new Date(),
+        row.task_date ? new Date(row.task_date) : new Date(),
         row.task_id
     );
 
@@ -45,7 +45,7 @@ function mapTaskToRow(task: Task): TaskInsertRow {
     const row: TaskInsertRow = {
         lead_id: leadId,
         title: task.getTitle(),
-        date: task.getDate().toISOString(),
+        task_date: task.getDate().toISOString(),
         completed: task.isCompleted(),
     };
 
@@ -61,7 +61,7 @@ export class TaskRepo {
         const { data, error } = await supabase
             .from(TABLE_NAME)
             .select("*")
-            .order("date", { ascending: true });
+            .order("task_date", { ascending: true });
 
         if (error || !data) {
             return [];
@@ -89,7 +89,7 @@ export class TaskRepo {
             .from(TABLE_NAME)
             .select("*")
             .eq("lead_id", leadId)
-            .order("date", { ascending: true });
+            .order("task_date", { ascending: true });
 
         if (error || !data) {
             return [];
