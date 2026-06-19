@@ -5,13 +5,17 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 type Props = {
     selectedDate: Date;
     onSelectDate: (date: Date) => void;
-    agendaCount: number;
+    unfinishedTaskCount: number;
+    pastUnfinishedTaskCounts: Record<string, number>;
+    todayDateString: string;
 };
 
 export default function AgendaCalendar({
     selectedDate,
     onSelectDate,
-    agendaCount,
+    unfinishedTaskCount,
+    pastUnfinishedTaskCounts,
+    todayDateString,
 }: Props) {
     const year = selectedDate.getFullYear();
     const month = selectedDate.getMonth();
@@ -28,6 +32,14 @@ export default function AgendaCalendar({
 
     function isSameDate(a: Date, b: Date) {
         return a.toDateString() === b.toDateString();
+    }
+
+    function formatDateKey(date: Date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+
+        return `${year}-${month}-${day}`;
     }
 
     function changeMonth(offset: number) {
@@ -73,6 +85,16 @@ export default function AgendaCalendar({
                 {days.map((date) => {
                     const active = isSameDate(date, selectedDate);
                     const muted = date.getMonth() !== month;
+                    const dateKey = formatDateKey(date);
+                    const pastCount = pastUnfinishedTaskCounts[dateKey] ?? 0;
+                    const badgeCount = active
+                        ? unfinishedTaskCount
+                        : dateKey < todayDateString
+                          ? pastCount
+                          : 0;
+                    const badgeColor = active
+                        ? "bg-green-600"
+                        : "bg-red-600";
 
                     return (
                         <button
@@ -84,9 +106,11 @@ export default function AgendaCalendar({
                         >
                             <div className="font-medium">{date.getDate()}</div>
 
-                            {active && agendaCount > 0 && (
-                                <div className="mt-2 rounded-md bg-blue-600 px-2 py-1 text-xs text-white">
-                                    {agendaCount} activities
+                            {badgeCount > 0 && (
+                                <div
+                                    className={`mt-2 rounded-md px-2 py-1 text-xs text-white ${badgeColor}`}
+                                >
+                                    {badgeCount} undone
                                 </div>
                             )}
                         </button>

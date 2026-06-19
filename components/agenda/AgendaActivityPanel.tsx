@@ -1,9 +1,12 @@
+"use client";
+
 import {
     Bell,
     CalendarCheck,
     CheckCircle2,
     Circle,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { AgendaActivity } from "@/domain/business/AgendaService";
 
@@ -11,6 +14,9 @@ type Props = {
     selectedDate: Date;
     agendaActivities: AgendaActivity[];
     loading: boolean;
+    currentTimeMs: number;
+    togglingTaskIds: number[];
+    onToggleTask: (activity: AgendaActivity) => Promise<void>;
 };
 
 function formatTime(date: Date) {
@@ -24,7 +30,78 @@ export default function AgendaActivityPanel({
     selectedDate,
     agendaActivities,
     loading,
+    currentTimeMs,
+    togglingTaskIds,
+    onToggleTask,
 }: Props) {
+    const router = useRouter();
+
+    function isOverdue(activity: AgendaActivity) {
+        return (
+            activity.type === "TASK" &&
+            activity.completed === false &&
+            activity.date.getTime() < currentTimeMs
+        );
+    }
+
+    function getSortedActivities() {
+        return [...agendaActivities].sort((activityA, activityB) => {
+            const rankA = getActivityRank(activityA);
+            const rankB = getActivityRank(activityB);
+
+            if (rankA !== rankB) {
+                return rankA - rankB;
+            }
+
+            return activityA.date.getTime() - activityB.date.getTime();
+        });
+    }
+
+    function getActivityRank(activity: AgendaActivity) {
+        if (activity.type !== "TASK") {
+            return 2;
+        }
+
+        if (activity.completed) {
+            return 3;
+        }
+
+        return isOverdue(activity) ? 0 : 1;
+    }
+
+    function getTaskStyles(activity: AgendaActivity) {
+        if (activity.completed) {
+            return {
+                card: "border-slate-200 bg-slate-50 text-slate-500",
+                icon: "bg-slate-100 text-slate-500",
+                badge: "bg-slate-200 text-slate-700",
+                title: "line-through text-slate-500",
+            };
+        }
+
+        if (isOverdue(activity)) {
+            return {
+                card: "border-red-200 bg-red-50",
+                icon: "bg-red-100 text-red-700",
+                badge: "bg-red-100 text-red-700",
+                title: "text-slate-950",
+            };
+        }
+
+        return {
+            card: "border-green-200 bg-green-50",
+            icon: "bg-green-100 text-green-700",
+            badge: "bg-green-100 text-green-700",
+            title: "text-slate-950",
+        };
+    }
+
+    function openLead(activity: AgendaActivity) {
+        if (activity.leadId) {
+            router.push(`/leads/${activity.leadId}`);
+        }
+    }
+
     return (
         <section className="min-h-[320px] rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
@@ -48,21 +125,46 @@ export default function AgendaActivityPanel({
                 ) : null}
 
                 {!loading &&
-                    agendaActivities.map((activity) => {
+                    getSortedActivities().map((activity) => {
                         const isTask = activity.type === "TASK";
                         const Icon = isTask ? CalendarCheck : Bell;
+                        const taskStyles = isTask
+                            ? getTaskStyles(activity)
+                            : null;
+                        const toggling = togglingTaskIds.includes(activity.id);
 
                         return (
                             <div
                                 key={`${activity.type}-${activity.id}`}
-                                className="rounded-lg border border-slate-200 p-4"
+                                onClick={() => openLead(activity)}
+                                onKeyDown={(event) => {
+                                    if (
+                                        activity.leadId &&
+                                        (event.key === "Enter" ||
+                                            event.key === " ")
+                                    ) {
+                                        event.preventDefault();
+                                        openLead(activity);
+                                    }
+                                }}
+                                role={activity.leadId ? "button" : undefined}
+                                tabIndex={activity.leadId ? 0 : undefined}
+                                className={`w-full rounded-lg border p-4 text-left transition ${
+                                    activity.leadId
+                                        ? "cursor-pointer hover:shadow-sm"
+                                        : ""
+                                } ${
+                                    isTask
+                                        ? taskStyles?.card
+                                        : "border-slate-200 bg-white"
+                                }`}
                             >
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex gap-3">
                                         <div
                                             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
                                                 isTask
-                                                    ? "bg-blue-50 text-blue-600"
+                                                    ? taskStyles?.icon
                                                     : "bg-amber-50 text-amber-600"
                                             }`}
                                         >
@@ -70,7 +172,13 @@ export default function AgendaActivityPanel({
                                         </div>
 
                                         <div>
-                                            <h3 className="font-semibold text-slate-950">
+                                            <h3
+                                                className={`font-semibold ${
+                                                    isTask
+                                                        ? taskStyles?.title
+                                                        : "text-slate-950"
+                                                }`}
+                                            >
                                                 {activity.title}
                                             </h3>
                                             <p className="mt-1 text-sm text-slate-500">
@@ -80,11 +188,21 @@ export default function AgendaActivityPanel({
                                     </div>
 
                                     {isTask ? (
-                                        <span
-                                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                        <button
+                                            type="button"
+                                            disabled={toggling}
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                void onToggleTask(activity);
+                                            }}
+                                            onKeyDown={(event) => {
+                                                event.stopPropagation();
+                                            }}
+                                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold disabled:cursor-wait disabled:opacity-60 ${taskStyles?.badge}`}
+                                            aria-label={`Mark task as ${
                                                 activity.completed
-                                                    ? "bg-green-50 text-green-700"
-                                                    : "bg-slate-100 text-slate-600"
+                                                    ? "uncompleted"
+                                                    : "completed"
                                             }`}
                                         >
                                             {activity.completed ? (
@@ -92,10 +210,14 @@ export default function AgendaActivityPanel({
                                             ) : (
                                                 <Circle size={14} />
                                             )}
-                                            {activity.completed
-                                                ? "Completed"
-                                                : "Uncompleted"}
-                                        </span>
+                                            {toggling
+                                                ? "Saving..."
+                                                : activity.completed
+                                                  ? "Completed"
+                                                  : isOverdue(activity)
+                                                    ? "Overdue"
+                                                    : "Uncompleted"}
+                                        </button>
                                     ) : (
                                         <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
                                             Notification

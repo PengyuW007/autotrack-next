@@ -39,10 +39,39 @@ function formatLeadDetails(lead: Lead): string {
     return [lead.phone, lead.leadEmail].filter(Boolean).join(" - ");
 }
 
+function getUnfinishedTaskCount(activities: AgendaActivity[]): number {
+    return activities.filter(
+        (activity) =>
+            activity.type === "TASK" && activity.completed === false
+    ).length;
+}
+
+function getPastUnfinishedTaskCounts(
+    tasks: Task[],
+    todayDateString: string
+): Record<string, number> {
+    return tasks.reduce<Record<string, number>>((counts, task) => {
+        const taskDateString = formatDateInput(task.getDate());
+
+        if (task.isCompleted() || taskDateString >= todayDateString) {
+            return counts;
+        }
+
+        counts[taskDateString] = (counts[taskDateString] ?? 0) + 1;
+        return counts;
+    }, {});
+}
+
 export default function AgendaPage() {
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     const [agendaActivities, setAgendaActivities] = useState<AgendaActivity[]>([]);
     const [loading, setLoading] = useState(true);
+    const [currentTimeMs, setCurrentTimeMs] = useState(0);
+    const [todayDateString, setTodayDateString] = useState("");
+    const [pastUnfinishedTaskCounts, setPastUnfinishedTaskCounts] = useState<
+        Record<string, number>
+    >({});
+    const [togglingTaskIds, setTogglingTaskIds] = useState<number[]>([]);
     const [refreshKey, setRefreshKey] = useState(0);
     const [leadSearchText, setLeadSearchText] = useState("");
     const [leadSearchResults, setLeadSearchResults] = useState<Lead[]>([]);
@@ -93,12 +122,20 @@ export default function AgendaPage() {
             }
 
             if (active) {
+                const allTasks = [...tasks, ...createdSystemTasks];
+                const now = new Date();
+
                 setAgendaActivities(
                     agendaService.getDailyActivities(
-                        [...tasks, ...createdSystemTasks],
+                        allTasks,
                         notifications,
                         selectedDate
                     )
+                );
+                setCurrentTimeMs(now.getTime());
+                setTodayDateString(formatDateInput(now));
+                setPastUnfinishedTaskCounts(
+                    getPastUnfinishedTaskCounts(allTasks, formatDateInput(now))
                 );
                 setLoading(false);
             }
@@ -204,6 +241,80 @@ export default function AgendaPage() {
         setSelectedLead(null);
         setLeadSearchResults([]);
         setRefreshKey((currentKey) => currentKey + 1);
+    }
+
+    async function handleToggleTask(activity: AgendaActivity) {
+        if (activity.type !== "TASK") {
+            return;
+        }
+
+        if (togglingTaskIds.includes(activity.id)) {
+            return;
+        }
+
+        setTogglingTaskIds((currentIds) => [...currentIds, activity.id]);
+
+        const taskRepo = new TaskRepo();
+        const task = await taskRepo.getTaskById(activity.id);
+
+        if (!task) {
+            setTogglingTaskIds((currentIds) =>
+                currentIds.filter((taskId) => taskId !== activity.id)
+            );
+            return;
+        }
+
+        task.setCompleted(!activity.completed);
+
+        const error = await taskRepo.updateTask(task);
+
+        if (error) {
+            setCreateError(error);
+            setTogglingTaskIds((currentIds) =>
+                currentIds.filter((taskId) => taskId !== activity.id)
+            );
+            return;
+        }
+
+        setAgendaActivities((currentActivities) =>
+            currentActivities.map((currentActivity) =>
+                currentActivity.type === "TASK" &&
+                currentActivity.id === activity.id
+                    ? {
+                          ...currentActivity,
+                          completed: !activity.completed,
+                      }
+                    : currentActivity
+            )
+        );
+
+        setPastUnfinishedTaskCounts((currentCounts) => {
+            const taskDateString = formatDateInput(activity.date);
+
+            if (!todayDateString || taskDateString >= todayDateString) {
+                return currentCounts;
+            }
+
+            const currentCount = currentCounts[taskDateString] ?? 0;
+            const nextCount = activity.completed
+                ? currentCount + 1
+                : Math.max(0, currentCount - 1);
+
+            if (nextCount === 0) {
+                const nextCounts = { ...currentCounts };
+                delete nextCounts[taskDateString];
+                return nextCounts;
+            }
+
+            return {
+                ...currentCounts,
+                [taskDateString]: nextCount,
+            };
+        });
+
+        setTogglingTaskIds((currentIds) =>
+            currentIds.filter((taskId) => taskId !== activity.id)
+        );
     }
 
     return (
@@ -370,13 +481,20 @@ export default function AgendaPage() {
             <AgendaCalendar
                 selectedDate={selectedDate}
                 onSelectDate={selectAgendaDate}
-                agendaCount={loading ? 0 : agendaActivities.length}
+                unfinishedTaskCount={
+                    loading ? 0 : getUnfinishedTaskCount(agendaActivities)
+                }
+                pastUnfinishedTaskCounts={pastUnfinishedTaskCounts}
+                todayDateString={todayDateString}
             />
 
             <AgendaActivityPanel
                 selectedDate={selectedDate}
                 agendaActivities={loading ? [] : agendaActivities}
                 loading={loading}
+                currentTimeMs={currentTimeMs}
+                togglingTaskIds={togglingTaskIds}
+                onToggleTask={handleToggleTask}
             />
         </main>
     );
