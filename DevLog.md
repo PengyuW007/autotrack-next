@@ -1,6 +1,81 @@
 # DevLog - AutoTrack Next.js & React
 
 ---
+**Date:** 2026-06-20
+
+**Objective:** Complete the Analytics module and implement the Notification system to improve sales performance tracking and lead communication awareness.
+
+## Summary
+
+Today's development focused on two major CRM features: the Analytics module and the Notification system.
+
+The Analytics module was expanded to provide meaningful sales performance insights rather than simple lead counts. Several conversion and lead quality metrics were designed and implemented to help sales professionals understand their pipeline performance and identify areas for improvement. Additional visualization support was added through trend-based charts and dashboard metrics.
+
+Work was also completed on the Notification system, which enables the application to track incoming lead interactions such as messages, calls, and emails. Notification activities were integrated with the Topbar notification bell and designed to work alongside the Dashboard's Recent Activity section. The distinction between notifications and activity history was clarified to provide a more realistic CRM workflow.
+
+These additions significantly improve AutoTrack's ability to support daily sales operations by helping users monitor both customer engagement and business performance.
+
+---
+
+## Itinerary
+
+### Planned Tasks
+
+* [x] Complete Analytics module implementation
+* [x] Design analytics visualizations
+* [x] Implement Notification system
+* [x] Connect notifications with lead activities
+
+### Additional Work
+
+* Implemented notification activities for calls, messages, and emails
+
+---
+
+## Challenges & Solutions
+
+### Challenge 1
+
+#### Problem
+
+The initial Analytics page contained mostly basic counts and lacked actionable business insights for sales professionals.
+
+#### Solution
+
+Several performance-focused metrics were introduced, including conversion ratios and lead quality indicators. These metrics provide more meaningful information about sales effectiveness and pipeline health.
+
+---
+
+### Challenge 2
+
+#### Problem
+
+Notifications and Recent Activities initially appeared to serve similar purposes, creating potential duplication and user confusion.
+
+#### Solution
+
+The responsibilities of both systems were clearly separated. Notifications now focus exclusively on incoming lead interactions such as calls, messages, and emails, while Recent Activities serve as a historical timeline of both salesperson actions and lead-generated events.
+
+---
+
+### Challenge 3
+
+#### Problem
+
+The CRM required a method for highlighting sales opportunities beyond static lead scores.
+
+#### Solution
+
+The Analytics module was expanded to support trend-based insights and future predictive functionality. This creates a foundation for advanced lead prioritization and sales forecasting features.
+
+---
+
+## Next
+
+* Move the contact methods besides lead's name
+* Begin predictive lead scoring and close probability exploration
+
+---
 **Date:** 2026-06-19
 
 **Objective:** Enhance the Agenda module by improving task scheduling, activity management, and integration with lead-based workflows.
