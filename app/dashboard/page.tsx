@@ -13,96 +13,16 @@ import {
     UserRound,
 } from "lucide-react";
 
-const priorityActions = [
-    {
-        leadId: 2,
-        leadName: "Sarah Chen",
-        type: "Overdue follow-up",
-        detail: "Test drive follow-up was due this morning.",
-        time: "Today 9:00 AM",
-        priority: "High",
-        score: 96,
-        tone: "red",
-    },
-    {
-        leadId: 1,
-        leadName: "John Smith",
-        type: "High-score lead",
-        detail: "Waiting for pricing confirmation on Jetta Comfortline.",
-        time: "Today 10:30 AM",
-        priority: "High",
-        score: 85,
-        tone: "amber",
-    },
-    {
-        leadId: 2,
-        leadName: "Sarah Chen",
-        type: "Unreplied message",
-        detail: "Asked whether Tiguan inventory can be held until Friday.",
-        time: "2 hours ago",
-        priority: "High",
-        score: 82,
-        tone: "red",
-    },
-    {
-        leadId: 1,
-        leadName: "John Smith",
-        type: "Appointment confirmation",
-        detail: "Confirm showroom visit and trade-in documents.",
-        time: "Today 1:30 PM",
-        priority: "Medium",
-        score: 74,
-        tone: "blue",
-    },
-];
-
-const todayTasks = [
-    {
-        leadId: 1,
-        title: "Call John about Jetta quote",
-        type: "Follow-up call",
-        time: "10:30 AM",
-        status: "overdue",
-        score: 85,
-        icon: Phone,
-    },
-    {
-        leadId: 2,
-        title: "Send Tiguan payment options",
-        type: "Message",
-        time: "11:00 AM",
-        status: "scheduled",
-        score: 62,
-        icon: MessageSquareReply,
-    },
-    {
-        leadId: 1,
-        title: "Confirm afternoon showroom appointment",
-        type: "Appointment",
-        time: "1:30 PM",
-        status: "scheduled",
-        score: 74,
-        icon: CalendarCheck,
-    },
-    {
-        leadId: 2,
-        title: "Prepare trade-in estimate notes",
-        type: "Preparation",
-        time: "3:00 PM",
-        status: "scheduled",
-        score: 58,
-        icon: UserRound,
-    },
-    {
-        leadId: 1,
-        title: "Review John Smith quote notes",
-        type: "Follow-up",
-        time: "9:00 AM",
-        status: "completed",
-        score: 70,
-        icon: CheckCircle2,
-    },
-];
+import { AgendaService } from "@/domain/business/AgendaService";
+import {
+    DashboardService,
+    DashboardTaskStatus,
+} from "@/domain/business/DashboardService";
+import { PriorityManager } from "@/domain/business/PriorityManager";
+import { ScoringService } from "@/domain/business/ScoringService";
+import { Task } from "@/domain/objects/Task";
+import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
+import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
 
 const recentActivities = [
     {
@@ -137,41 +57,6 @@ const recentActivities = [
     },
 ];
 
-const overdueFollowUps = priorityActions.filter(
-    (action) => action.type === "Overdue follow-up"
-).length;
-
-const summaryCards = [
-    {
-        title: "Today's Tasks",
-        value: todayTasks.length.toString(),
-        description: "Scheduled work due today",
-        icon: CalendarCheck,
-    },
-    {
-        title: "High Priority Leads",
-        value: priorityActions
-            .filter((action) => action.priority === "High")
-            .length.toString(),
-        description: "Need immediate attention today",
-        icon: AlertTriangle,
-    },
-    {
-        title: "Unreplied Messages",
-        value: priorityActions
-            .filter((action) => action.type === "Unreplied message")
-            .length.toString(),
-        description: "Customer replies waiting for response",
-        icon: MessageSquareWarning,
-    },
-    {
-        title: "Overdue Follow-ups",
-        value: overdueFollowUps.toString(),
-        description: "Missed or past-due scheduled actions",
-        icon: Clock,
-    },
-];
-
 function getPriorityTone(tone: string) {
     if (tone === "red") {
         return "border-red-200 bg-red-50 text-red-700";
@@ -184,19 +69,7 @@ function getPriorityTone(tone: string) {
     return "border-blue-200 bg-blue-50 text-blue-700";
 }
 
-function getTaskStatusRank(status: string) {
-    if (status === "overdue") {
-        return 0;
-    }
-
-    if (status === "scheduled") {
-        return 1;
-    }
-
-    return 2;
-}
-
-function getTaskTone(status: string) {
+function getTaskTone(status: DashboardTaskStatus) {
     if (status === "overdue") {
         return {
             card: "border-red-200 bg-red-50 hover:border-red-300 hover:bg-red-100/60",
@@ -229,17 +102,87 @@ function getTaskTone(status: string) {
     };
 }
 
-export default function DashboardPage() {
-    const sortedTodayTasks = [...todayTasks].sort((taskA, taskB) => {
-        const rankDiff =
-            getTaskStatusRank(taskA.status) - getTaskStatusRank(taskB.status);
+function getTaskIcon(type: string) {
+    if (type === "Follow-up call") {
+        return Phone;
+    }
 
-        if (rankDiff !== 0) {
-            return rankDiff;
+    if (type === "Message") {
+        return MessageSquareReply;
+    }
+
+    if (type === "Appointment") {
+        return CalendarCheck;
+    }
+
+    return UserRound;
+}
+
+export default async function DashboardPage() {
+    const targetDate = new Date();
+    const leadRepo = new LeadRepo();
+    const taskRepo = new TaskRepo();
+    const scoringService = new ScoringService();
+    const priorityManager = new PriorityManager(scoringService);
+    const agendaService = new AgendaService(scoringService, priorityManager);
+    const dashboardService = new DashboardService(
+        scoringService,
+        agendaService
+    );
+
+    const [leads, tasks, followUpLeads] = await Promise.all([
+        leadRepo.getAllLeads(),
+        taskRepo.getAllTasks(),
+        leadRepo.getLeadsByFollowUpDate(targetDate),
+    ]);
+
+    const systemTasks = dashboardService.getSystemAssignedTasks(
+        followUpLeads,
+        tasks,
+        targetDate
+    );
+    const createdSystemTasks: Task[] = [];
+
+    for (const task of systemTasks) {
+        const error = await taskRepo.insertTask(task);
+
+        if (!error) {
+            createdSystemTasks.push(task);
         }
+    }
 
-        return taskA.time.localeCompare(taskB.time);
-    });
+    const dashboardData = dashboardService.getDashboardData(
+        leads,
+        [...tasks, ...createdSystemTasks],
+        targetDate
+    );
+
+    const summaryCards = [
+        {
+            title: "Today's Tasks",
+            value: dashboardData.metrics.todayTaskCount.toString(),
+            description: "Scheduled work due today",
+            icon: CalendarCheck,
+        },
+        {
+            title: "High Priority Leads",
+            value: dashboardData.metrics.highPriorityLeadCount.toString(),
+            description: "Need immediate attention today",
+            icon: AlertTriangle,
+        },
+        {
+            title: "Unreplied Messages",
+            value: dashboardData.metrics.unrepliedMessageCount.toString(),
+            description: "Customer replies waiting for response",
+            icon: MessageSquareWarning,
+        },
+        {
+            title: "Overdue Follow-ups",
+            value: dashboardData.metrics.overdueTaskCount.toString(),
+            description: "Missed or past-due scheduled actions",
+            icon: Clock,
+        },
+    ];
 
     return (
         <main className="bg-slate-50 text-slate-900">
@@ -286,9 +229,9 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="max-h-[430px] space-y-4 overflow-y-auto pr-2">
-                        {priorityActions.map((action) => (
+                        {dashboardData.priorityActions.map((action) => (
                             <Link
-                                key={`${action.leadId}-${action.type}-${action.time}`}
+                                key={action.leadId}
                                 href={`/leads/${action.leadId}`}
                                 className={`block rounded-lg border p-5 transition hover:border-blue-300 hover:bg-blue-50/60 ${getPriorityTone(action.tone)}`}
                             >
@@ -304,23 +247,28 @@ export default function DashboardPage() {
                                         </div>
 
                                         <p className="mt-2 text-sm font-semibold">
-                                            {action.type}
+                                            {action.stage} - {action.status}
                                         </p>
                                         <p className="mt-2 text-sm text-slate-700">
-                                            {action.detail}
+                                            {action.vehicleInterest}
+                                        </p>
+                                        <p className="mt-2 text-sm text-slate-700">
+                                            {action.reason}
                                         </p>
                                     </div>
 
                                     <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold">
-                                        {action.priority}
+                                        High
                                     </span>
                                 </div>
-
-                                <p className="mt-3 text-xs text-slate-500">
-                                    {action.time}
-                                </p>
                             </Link>
                         ))}
+
+                        {dashboardData.priorityActions.length === 0 ? (
+                            <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                                No high-priority leads found.
+                            </p>
+                        ) : null}
                     </div>
                 </div>
 
@@ -335,16 +283,11 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="max-h-[430px] space-y-4 overflow-y-auto pr-2">
-                        {sortedTodayTasks.map((task) => {
-                            const Icon = task.icon;
+                        {dashboardData.todayTasks.map((task) => {
+                            const Icon = getTaskIcon(task.type);
                             const tone = getTaskTone(task.status);
-
-                            return (
-                                <Link
-                                    key={`${task.leadId}-${task.title}`}
-                                    href={`/leads/${task.leadId}`}
-                                    className={`flex items-start gap-4 rounded-lg border p-4 transition ${tone.card}`}
-                                >
+                            const taskContent = (
+                                <>
                                     <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${tone.icon}`}>
                                         <Icon size={20} />
                                     </div>
@@ -361,10 +304,40 @@ export default function DashboardPage() {
                                         <p className={`mt-1 text-sm ${tone.meta}`}>
                                             {task.time} - {task.type} - score {task.score}
                                         </p>
+                                        <p className={`mt-1 text-xs ${tone.meta}`}>
+                                            {task.leadName}
+                                        </p>
                                     </div>
+                                </>
+                            );
+
+                            if (!task.leadId) {
+                                return (
+                                    <div
+                                        key={task.id}
+                                        className={`flex items-start gap-4 rounded-lg border p-4 transition ${tone.card}`}
+                                    >
+                                        {taskContent}
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <Link
+                                    key={task.id}
+                                    href={`/leads/${task.leadId}`}
+                                    className={`flex items-start gap-4 rounded-lg border p-4 transition ${tone.card}`}
+                                >
+                                    {taskContent}
                                 </Link>
                             );
                         })}
+
+                        {dashboardData.todayTasks.length === 0 ? (
+                            <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                                No tasks scheduled for today.
+                            </p>
+                        ) : null}
                     </div>
                 </div>
             </section>
@@ -377,6 +350,7 @@ export default function DashboardPage() {
                     <p className="mt-1 text-sm text-slate-500">
                         Recent system updates from leads, messages, tasks, appointments, and reminders.
                     </p>
+                    {/* TODO: Replace static recent activity with NotificationRepository and message activity tracking. */}
                 </div>
 
                 <div className="max-h-[270px] space-y-3 overflow-y-auto pr-2">
