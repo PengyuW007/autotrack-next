@@ -5,6 +5,7 @@ import {
     CalendarCheck,
     CheckCircle2,
     Clock,
+    Mail,
     MessageSquareReply,
     MessageSquareWarning,
     Phone,
@@ -95,6 +96,8 @@ function getRecentActivityIcon(type: DashboardRecentActivityType) {
             return RefreshCcw;
         case "message":
             return MessageSquareReply;
+        case "email":
+            return Mail;
         case "call":
             return Phone;
         case "task_completed":

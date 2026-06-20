@@ -12,6 +12,7 @@ import {
     Circle,
     Mail,
     MapPin,
+    MessageSquare,
     Pencil,
     Phone,
     PlusCircle,
@@ -22,9 +23,11 @@ import {
 } from "lucide-react";
 
 import { Lead } from "@/domain/objects/Lead";
+import { Notification } from "@/domain/objects/Notification";
 import { Task } from "@/domain/objects/Task";
 import { Vehicle } from "@/domain/objects/Vehicle";
 import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
+import { NotificationRepo } from "@/lib/persistence/real/supabase/NotificationRepo";
 import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
 
 export interface LeadDetailTaskViewModel {
@@ -219,12 +222,16 @@ export default function LeadDetailPanel({
     const [currentLead, setCurrentLead] = useState(lead);
     const [draftLead, setDraftLead] = useState(lead);
     const [leadTasks, setLeadTasks] = useState(tasks);
+    const [leadNotifications, setLeadNotifications] = useState(notifications);
     const [isEditing, setIsEditing] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [creatingTask, setCreatingTask] = useState(false);
     const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
+    const [loggingCommunication, setLoggingCommunication] = useState<
+        "call" | "email" | "message" | null
+    >(null);
     const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -413,6 +420,61 @@ export default function LeadDetailPanel({
         }
     }
 
+    async function handleLogCommunication(
+        communicationType: "call" | "email" | "message"
+    ) {
+        const leadName = fullName || "this lead";
+        const communicationTitleMap = {
+            call: `You called ${leadName}`,
+            email: `You sent an email to ${leadName}`,
+            message: `You sent a message to ${leadName}`,
+        };
+
+        setLoggingCommunication(communicationType);
+        setErrorMessage(null);
+
+        try {
+            const notificationRepository = new NotificationRepo();
+            const notification = new Notification(
+                new Lead({
+                    leadID: currentLead.leadID,
+                    firstName: currentLead.firstName || "Lead",
+                    lastName: currentLead.lastName,
+                }),
+                communicationTitleMap[communicationType],
+                new Date()
+            );
+            const error =
+                await notificationRepository.insertNotification(notification);
+
+            if (error) {
+                setErrorMessage(error);
+                return;
+            }
+
+            const now = new Date();
+
+            setLeadNotifications((currentNotifications) => [
+                {
+                    notificationID: notification.getEventID(),
+                    title: notification.getTitle(),
+                    date: now.toISOString().split("T")[0],
+                    leadID: currentLead.leadID,
+                },
+                ...currentNotifications,
+            ]);
+            router.refresh();
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to log communication."
+            );
+        } finally {
+            setLoggingCommunication(null);
+        }
+    }
+
     function startEditingTask(task: LeadDetailTaskViewModel) {
         setEditingTaskId(task.taskID);
         setDraftTaskTitle(task.title);
@@ -567,6 +629,40 @@ export default function LeadDetailPanel({
                             </>
                         ) : (
                             <>
+                                <button
+                                    onClick={() => handleLogCommunication("call")}
+                                    disabled={loggingCommunication !== null}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <Phone size={16} />
+                                    {loggingCommunication === "call"
+                                        ? "Logging..."
+                                        : "Call"}
+                                </button>
+                                <button
+                                    onClick={() =>
+                                        handleLogCommunication("email")
+                                    }
+                                    disabled={loggingCommunication !== null}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <Mail size={16} />
+                                    {loggingCommunication === "email"
+                                        ? "Logging..."
+                                        : "Email"}
+                                </button>
+                                <button
+                                    onClick={() =>
+                                        handleLogCommunication("message")
+                                    }
+                                    disabled={loggingCommunication !== null}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <MessageSquare size={16} />
+                                    {loggingCommunication === "message"
+                                        ? "Logging..."
+                                        : "Message"}
+                                </button>
                                 <button
                                     onClick={() => setIsEditing(true)}
                                     className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
@@ -1109,7 +1205,7 @@ export default function LeadDetailPanel({
                         </h3>
 
                         <div className="mt-5 space-y-3">
-                            {notifications.map((notification) => (
+                            {leadNotifications.map((notification) => (
                                 <div
                                     key={notification.notificationID}
                                     className="flex gap-3 rounded-lg border border-slate-200 p-4"
@@ -1128,7 +1224,7 @@ export default function LeadDetailPanel({
                                 </div>
                             ))}
 
-                            {notifications.length === 0 ? (
+                            {leadNotifications.length === 0 ? (
                                 <p className="text-sm text-slate-400">
                                     No notifications for this lead.
                                 </p>

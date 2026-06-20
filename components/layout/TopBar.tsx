@@ -1,12 +1,49 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
     Bell,
     CalendarDays,
-    Clock
+    CalendarCheck,
+    CheckCircle2,
+    Clock,
+    Mail,
+    MessageSquareReply,
+    Phone,
+    PlusCircle,
+    RefreshCcw,
 } from "lucide-react";
+
+import {
+    RecentActivityItem,
+    RecentActivityService,
+    RecentActivityType,
+} from "@/domain/business/RecentActivityService";
+import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
+import { NotificationRepo } from "@/lib/persistence/real/supabase/NotificationRepo";
+
+function getActivityIcon(type: RecentActivityType) {
+    switch (type) {
+        case "lead_added":
+            return PlusCircle;
+        case "lead_updated":
+            return RefreshCcw;
+        case "message":
+            return MessageSquareReply;
+        case "email":
+            return Mail;
+        case "call":
+            return Phone;
+        case "task_completed":
+            return CheckCircle2;
+        case "appointment":
+            return CalendarCheck;
+        default:
+            return Bell;
+    }
+}
 
 export default function TopBar() {
     const pageInfoMap: Record<string, { title: string; description: string }> = {
@@ -42,6 +79,11 @@ export default function TopBar() {
               };
 
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [notificationsOpen, setNotificationsOpen] = useState(false);
+    const [topbarNotifications, setTopbarNotifications] = useState<
+        RecentActivityItem[]
+    >([]);
+    const [notificationsLoading, setNotificationsLoading] = useState(true);
 
     const date = currentTime.toLocaleDateString(
         "en-CA",
@@ -68,6 +110,52 @@ export default function TopBar() {
         return () => clearInterval(timer);
     }, []);
 
+    useEffect(() => {
+        let active = true;
+
+        async function loadTopbarNotifications() {
+            try {
+                const leadRepo = new LeadRepo();
+                const notificationRepo = new NotificationRepo();
+
+                const [leads, notifications] = await Promise.all([
+                    leadRepo.getAllLeads(),
+                    notificationRepo.getAllNotifications(),
+                ]);
+
+                if (!active) {
+                    return;
+                }
+
+                const recentActivityService = new RecentActivityService();
+                setTopbarNotifications(
+                    recentActivityService.getTopbarNotifications({
+                        leads,
+                        notifications,
+                        referenceDate: new Date(),
+                        limit: 5,
+                    })
+                );
+            } finally {
+                if (active) {
+                    setNotificationsLoading(false);
+                }
+            }
+        }
+
+        loadTopbarNotifications();
+        const refreshTimer = setInterval(loadTopbarNotifications, 60000);
+
+        return () => {
+            active = false;
+            clearInterval(refreshTimer);
+        };
+    }, [pathname]);
+
+    const unreadCount = topbarNotifications.filter(
+        (activity) => activity.unread
+    ).length;
+
     return (
         <header className="flex h-20 items-center justify-between border-b bg-white px-8">
 
@@ -82,10 +170,108 @@ export default function TopBar() {
 
             <div className="flex items-center gap-8">
 
-                <Bell
-                    size={20}
-                    className="cursor-pointer text-gray-500 hover:text-blue-600"
-                />
+                <div className="relative">
+                    <button
+                        type="button"
+                        onClick={() =>
+                            setNotificationsOpen((current) => !current)
+                        }
+                        className="relative rounded-full p-2 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
+                        aria-label="Open notifications"
+                    >
+                        <Bell size={20} />
+                        {unreadCount > 0 ? (
+                            <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                                {unreadCount}
+                            </span>
+                        ) : null}
+                    </button>
+
+                    {notificationsOpen ? (
+                        <div className="absolute right-0 top-12 z-50 w-96 rounded-lg border border-slate-200 bg-white shadow-xl">
+                            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                                <div>
+                                    <p className="font-semibold text-slate-950">
+                                        Notifications
+                                    </p>
+                                    <p className="text-xs text-slate-500">
+                                        Incoming lead messages, emails, and calls
+                                    </p>
+                                </div>
+                                {unreadCount > 0 ? (
+                                    <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                                        {unreadCount} unread
+                                    </span>
+                                ) : null}
+                            </div>
+
+                            <div className="max-h-96 overflow-y-auto p-2">
+                                {notificationsLoading ? (
+                                    <p className="px-3 py-4 text-sm text-slate-500">
+                                        Loading notifications...
+                                    </p>
+                                ) : null}
+
+                                {!notificationsLoading &&
+                                topbarNotifications.length === 0 ? (
+                                    <p className="px-3 py-4 text-sm text-slate-500">
+                                        No notifications.
+                                    </p>
+                                ) : null}
+
+                                {topbarNotifications.map((activity) => {
+                                    const Icon = getActivityIcon(activity.type);
+
+                                    return (
+                                        <Link
+                                            key={activity.id}
+                                            href={
+                                                activity.leadId
+                                                    ? `/leads/${activity.leadId}`
+                                                    : "/dashboard"
+                                            }
+                                            onClick={() =>
+                                                setNotificationsOpen(false)
+                                            }
+                                            className="flex gap-3 rounded-lg px-3 py-3 transition hover:bg-blue-50"
+                                        >
+                                            <div
+                                                className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                                                    activity.unread
+                                                        ? "bg-red-50 text-red-600"
+                                                        : "bg-slate-100 text-slate-600"
+                                                }`}
+                                            >
+                                                <Icon size={17} />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="truncate text-sm font-semibold text-slate-950">
+                                                        {activity.label}
+                                                    </p>
+                                                    {activity.unread ? (
+                                                        <span className="h-2 w-2 shrink-0 rounded-full bg-red-600" />
+                                                    ) : null}
+                                                </div>
+                                                <p className="mt-1 line-clamp-2 text-sm text-slate-600">
+                                                    {activity.detail}
+                                                </p>
+                                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                                                    {activity.leadName ? (
+                                                        <span className="font-medium text-slate-500">
+                                                            {activity.leadName}
+                                                        </span>
+                                                    ) : null}
+                                                    <span>{activity.time}</span>
+                                                </div>
+                                            </div>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ) : null}
+                </div>
 
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                     <CalendarDays size={16}/>
