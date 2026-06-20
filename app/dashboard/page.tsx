@@ -22,40 +22,9 @@ import { PriorityManager } from "@/domain/business/PriorityManager";
 import { ScoringService } from "@/domain/business/ScoringService";
 import { Task } from "@/domain/objects/Task";
 import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
+import { NotificationRepo } from "@/lib/persistence/real/supabase/NotificationRepo";
 import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
-
-const recentActivities = [
-    {
-        label: "New lead added",
-        detail: "Daniel Zhang was added from website inquiry.",
-        time: "12 minutes ago",
-        icon: PlusCircle,
-    },
-    {
-        label: "Customer reply received",
-        detail: "Sarah Chen replied to the Tiguan follow-up message.",
-        time: "2 hours ago",
-        icon: MessageSquareReply,
-    },
-    {
-        label: "Task completed",
-        detail: "John Smith quote call marked complete.",
-        time: "Yesterday 4:20 PM",
-        icon: CheckCircle2,
-    },
-    {
-        label: "Lead status changed",
-        detail: "Sarah Chen moved from Contacted to Test Drive.",
-        time: "Yesterday 2:10 PM",
-        icon: RefreshCcw,
-    },
-    {
-        label: "Reminder triggered",
-        detail: "Follow-up reminder created for John Smith.",
-        time: "Yesterday 9:00 AM",
-        icon: Bell,
-    },
-];
+import { DashboardRecentActivityType } from "@/domain/business/DashboardService";
 
 function getPriorityTone(tone: string) {
     if (tone === "red") {
@@ -118,10 +87,30 @@ function getTaskIcon(type: string) {
     return UserRound;
 }
 
+function getRecentActivityIcon(type: DashboardRecentActivityType) {
+    switch (type) {
+        case "lead_added":
+            return PlusCircle;
+        case "lead_updated":
+            return RefreshCcw;
+        case "message":
+            return MessageSquareReply;
+        case "call":
+            return Phone;
+        case "task_completed":
+            return CheckCircle2;
+        case "appointment":
+            return CalendarCheck;
+        default:
+            return Bell;
+    }
+}
+
 export default async function DashboardPage() {
     const targetDate = new Date();
     const leadRepo = new LeadRepo();
     const taskRepo = new TaskRepo();
+    const notificationRepo = new NotificationRepo();
     const scoringService = new ScoringService();
     const priorityManager = new PriorityManager(scoringService);
     const agendaService = new AgendaService(scoringService, priorityManager);
@@ -130,9 +119,10 @@ export default async function DashboardPage() {
         agendaService
     );
 
-    const [leads, tasks, followUpLeads] = await Promise.all([
+    const [leads, tasks, notifications, followUpLeads] = await Promise.all([
         leadRepo.getAllLeads(),
         taskRepo.getAllTasks(),
+        notificationRepo.getAllNotifications(),
         leadRepo.getLeadsByFollowUpDate(targetDate),
     ]);
 
@@ -154,6 +144,7 @@ export default async function DashboardPage() {
     const dashboardData = dashboardService.getDashboardData(
         leads,
         [...tasks, ...createdSystemTasks],
+        notifications,
         targetDate
     );
 
@@ -350,17 +341,21 @@ export default async function DashboardPage() {
                     <p className="mt-1 text-sm text-slate-500">
                         Recent system updates from leads, messages, tasks, appointments, and reminders.
                     </p>
-                    {/* TODO: Replace static recent activity with NotificationRepository and message activity tracking. */}
                 </div>
 
                 <div className="max-h-[270px] space-y-3 overflow-y-auto pr-2">
-                    {recentActivities.map((activity) => {
-                        const Icon = activity.icon;
+                    {dashboardData.recentActivities.map((activity) => {
+                        const Icon = getRecentActivityIcon(activity.type);
 
                         return (
-                            <div
-                                key={`${activity.label}-${activity.time}`}
-                                className="flex gap-4 rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600"
+                            <Link
+                                key={activity.id}
+                                href={
+                                    activity.leadId
+                                        ? `/leads/${activity.leadId}`
+                                        : "/dashboard"
+                                }
+                                className="flex gap-4 rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600 transition hover:bg-blue-50"
                             >
                                 <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-blue-600">
                                     <Icon size={17} />
@@ -373,13 +368,24 @@ export default async function DashboardPage() {
                                     <p className="mt-1">
                                         {activity.detail}
                                     </p>
+                                    {activity.leadName ? (
+                                        <p className="mt-1 text-xs font-medium text-slate-500">
+                                            {activity.leadName}
+                                        </p>
+                                    ) : null}
                                     <p className="mt-1 text-xs text-slate-400">
                                         {activity.time}
                                     </p>
                                 </div>
-                            </div>
+                            </Link>
                         );
                     })}
+
+                    {dashboardData.recentActivities.length === 0 ? (
+                        <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                            No recent activity found.
+                        </p>
+                    ) : null}
                 </div>
             </section>
         </main>

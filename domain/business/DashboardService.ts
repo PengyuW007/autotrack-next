@@ -1,6 +1,7 @@
 import { AgendaService } from "@/domain/business/AgendaService";
 import { ScoringService } from "@/domain/business/ScoringService";
 import { Lead } from "@/domain/objects/Lead";
+import { Notification } from "@/domain/objects/Notification";
 import { Task } from "@/domain/objects/Task";
 
 export type DashboardTaskStatus = "overdue" | "scheduled" | "completed";
@@ -28,6 +29,26 @@ export type DashboardPriorityItem = {
     tone: "red" | "amber" | "blue";
 };
 
+export type DashboardRecentActivityType =
+    | "lead_added"
+    | "lead_updated"
+    | "message"
+    | "call"
+    | "task_completed"
+    | "appointment"
+    | "reminder";
+
+export type DashboardRecentActivityItem = {
+    id: string;
+    type: DashboardRecentActivityType;
+    label: string;
+    detail: string;
+    leadId: number | null;
+    leadName: string | null;
+    timestamp: Date;
+    time: string;
+};
+
 export type DashboardMetrics = {
     todayTaskCount: number;
     highPriorityLeadCount: number;
@@ -39,6 +60,7 @@ export type DashboardData = {
     metrics: DashboardMetrics;
     todayTasks: DashboardTaskItem[];
     priorityActions: DashboardPriorityItem[];
+    recentActivities: DashboardRecentActivityItem[];
 };
 
 export class DashboardService {
@@ -58,11 +80,18 @@ export class DashboardService {
     getDashboardData(
         leads: Lead[],
         tasks: Task[],
+        notifications: Notification[],
         targetDate: Date
     ): DashboardData {
         const todayTasks = this.getTodayTasks(tasks, leads, targetDate);
         const overdueTasks = this.getOverdueTasks(tasks, targetDate);
         const highPriorityLeads = this.getHighPriorityLeads(leads);
+        const recentActivities = this.getRecentActivities(
+            leads,
+            tasks,
+            notifications,
+            targetDate
+        );
 
         return {
             metrics: {
@@ -76,6 +105,7 @@ export class DashboardService {
             priorityActions: highPriorityLeads.map((lead) =>
                 this.toPriorityItem(lead)
             ),
+            recentActivities,
         };
     }
 
@@ -149,6 +179,107 @@ export class DashboardService {
             .sort((leadA, leadB) => leadB.score - leadA.score);
     }
 
+    getRecentActivities(
+        leads: Lead[],
+        tasks: Task[],
+        notifications: Notification[],
+        referenceDate: Date
+    ): DashboardRecentActivityItem[] {
+        const leadMap = this.createLeadMap(leads);
+
+        const leadActivities = leads.flatMap((lead) => {
+            const activities: DashboardRecentActivityItem[] = [
+                {
+                    id: `lead-added-${lead.leadID}`,
+                    type: "lead_added",
+                    label: "New lead added",
+                    detail: `${lead.getLeadName()} was added to the CRM.`,
+                    leadId: lead.leadID,
+                    leadName: lead.getLeadName(),
+                    timestamp: lead.createdAt,
+                    time: this.formatRelativeTime(
+                        lead.createdAt,
+                        referenceDate
+                    ),
+                },
+            ];
+
+            if (lead.lastInteractionDate) {
+                activities.push({
+                    id: `lead-updated-${lead.leadID}-${lead.lastInteractionDate.getTime()}`,
+                    type: "lead_updated",
+                    label: "Lead activity updated",
+                    detail: `${lead.stage} lead marked ${lead.status ? "active" : "lost"}.`,
+                    leadId: lead.leadID,
+                    leadName: lead.getLeadName(),
+                    timestamp: lead.lastInteractionDate,
+                    time: this.formatRelativeTime(
+                        lead.lastInteractionDate,
+                        referenceDate
+                    ),
+                });
+            }
+
+            return activities;
+        });
+
+        const taskActivities = tasks
+            .filter((task) => task.isCompleted())
+            .map((task): DashboardRecentActivityItem => {
+                const lead = this.getTaskLead(task, leadMap);
+
+                return {
+                    id: `task-completed-${task.getEventID()}`,
+                    type: "task_completed",
+                    label: "Task completed",
+                    detail: task.getTitle(),
+                    leadId: lead?.leadID ?? task.getLead()?.leadID ?? null,
+                    leadName: lead?.getLeadName() ?? null,
+                    timestamp: task.getDate(),
+                    time: this.formatRelativeTime(
+                        task.getDate(),
+                        referenceDate
+                    ),
+                };
+            });
+
+        const notificationActivities = notifications.map(
+            (notification): DashboardRecentActivityItem => {
+                const leadId = notification.getLead()?.leadID ?? null;
+                const lead = leadId ? leadMap.get(leadId) : null;
+                const type = this.getNotificationActivityType(
+                    notification.getTitle()
+                );
+
+                return {
+                    id: `notification-${notification.getEventID()}`,
+                    type,
+                    label: this.getActivityLabel(type),
+                    detail: notification.getTitle(),
+                    leadId,
+                    leadName: lead?.getLeadName() ?? null,
+                    timestamp: notification.getDate(),
+                    time: this.formatRelativeTime(
+                        notification.getDate(),
+                        referenceDate
+                    ),
+                };
+            }
+        );
+
+        return [
+            ...leadActivities,
+            ...taskActivities,
+            ...notificationActivities,
+        ]
+            .sort(
+                (activityA, activityB) =>
+                    activityB.timestamp.getTime() -
+                    activityA.timestamp.getTime()
+            )
+            .slice(0, 30);
+    }
+
     private toTaskItem(
         task: Task,
         leadMap: Map<number, Lead>,
@@ -188,6 +319,19 @@ export class DashboardService {
 
     private createLeadMap(leads: Lead[]): Map<number, Lead> {
         return new Map(leads.map((lead) => [lead.leadID, lead]));
+    }
+
+    private getTaskLead(
+        task: Task,
+        leadMap: Map<number, Lead>
+    ): Lead | null {
+        const leadId = task.getLead()?.leadID;
+
+        if (!leadId) {
+            return null;
+        }
+
+        return leadMap.get(leadId) ?? null;
     }
 
     private getTaskStatus(
@@ -245,6 +389,57 @@ export class DashboardService {
         return "Follow-up";
     }
 
+    private getNotificationActivityType(
+        title: string
+    ): DashboardRecentActivityType {
+        const normalizedTitle = title.toLowerCase();
+
+        if (
+            normalizedTitle.includes("appointment") ||
+            normalizedTitle.includes("test drive") ||
+            normalizedTitle.includes("confirmed")
+        ) {
+            return "appointment";
+        }
+
+        if (
+            normalizedTitle.includes("call") ||
+            normalizedTitle.includes("phone")
+        ) {
+            return "call";
+        }
+
+        if (
+            normalizedTitle.includes("message") ||
+            normalizedTitle.includes("reply") ||
+            normalizedTitle.includes("email") ||
+            normalizedTitle.includes("sent")
+        ) {
+            return "message";
+        }
+
+        return "reminder";
+    }
+
+    private getActivityLabel(type: DashboardRecentActivityType): string {
+        switch (type) {
+            case "appointment":
+                return "Appointment confirmed";
+            case "call":
+                return "Call logged";
+            case "message":
+                return "Customer message sent";
+            case "task_completed":
+                return "Task completed";
+            case "lead_added":
+                return "New lead added";
+            case "lead_updated":
+                return "Lead stage/status changed";
+            default:
+                return "Reminder triggered";
+        }
+    }
+
     private getPriorityTone(score: number): "red" | "amber" | "blue" {
         if (score >= this.highPriorityThreshold + 20) {
             return "red";
@@ -271,5 +466,41 @@ export class DashboardService {
             hour: "numeric",
             minute: "2-digit",
         }).format(date);
+    }
+
+    private formatRelativeTime(date: Date, referenceDate: Date): string {
+        const diffMilliseconds =
+            referenceDate.getTime() - date.getTime();
+        const absDiffMilliseconds = Math.abs(diffMilliseconds);
+        const minute = 60 * 1000;
+        const hour = 60 * minute;
+        const day = 24 * hour;
+
+        if (absDiffMilliseconds < minute) {
+            return "Just now";
+        }
+
+        if (absDiffMilliseconds < hour) {
+            const minutes = Math.max(
+                1,
+                Math.round(absDiffMilliseconds / minute)
+            );
+            return diffMilliseconds >= 0
+                ? `${minutes} minutes ago`
+                : `In ${minutes} minutes`;
+        }
+
+        if (absDiffMilliseconds < day) {
+            const hours = Math.max(1, Math.round(absDiffMilliseconds / hour));
+            return diffMilliseconds >= 0
+                ? `${hours} hours ago`
+                : `In ${hours} hours`;
+        }
+
+        const days = Math.max(1, Math.round(absDiffMilliseconds / day));
+
+        return diffMilliseconds >= 0
+            ? `${days} days ago`
+            : `In ${days} days`;
     }
 }
