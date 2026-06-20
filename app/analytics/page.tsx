@@ -13,6 +13,8 @@ import {
     AnalyticsNumberMetric,
     AnalyticsRatioMetric,
     AnalyticsService,
+    HotLeadsTrendPoint,
+    SalesClosingRateTrendPoint,
 } from "@/domain/business/AnalyticsService";
 import { ScoringService } from "@/domain/business/ScoringService";
 import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
@@ -29,6 +31,11 @@ const sectionConfig = [
         title: "Lead Quality",
         description: "Current pipeline health and high-intent opportunity mix.",
         icon: Gauge,
+    },
+    {
+        title: "Performance Trends",
+        description: "Monthly changes in closing rate and hot lead generation.",
+        icon: Activity,
     },
     {
         title: "Communication Effectiveness",
@@ -136,6 +143,169 @@ function SectionHeader({
     );
 }
 
+function getChartPoints(values: number[]) {
+    const width = 520;
+    const height = 220;
+    const paddingX = 38;
+    const paddingY = 30;
+    const maxValue = Math.max(...values, 1);
+    const stepX =
+        values.length <= 1
+            ? 0
+            : (width - paddingX * 2) / (values.length - 1);
+
+    return values.map((value, index) => {
+        const x = paddingX + index * stepX;
+        const y =
+            height -
+            paddingY -
+            (value / maxValue) * (height - paddingY * 2);
+
+        return { x, y };
+    });
+}
+
+function LineChartCard({
+    title,
+    description,
+    data,
+    valueSuffix = "",
+}: {
+    title: string;
+    description: string;
+    data: Array<{
+        period: string;
+        value: number;
+    }>;
+    valueSuffix?: string;
+}) {
+    const chartWidth = 520;
+    const chartHeight = 220;
+
+    if (data.length < 2) {
+        return (
+            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <h3 className="font-semibold text-slate-950">
+                    {title}
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                    {description}
+                </p>
+                <div className="mt-5 flex min-h-[220px] items-center justify-center rounded-lg bg-slate-50 text-sm text-slate-500">
+                    Not enough data to display trend yet.
+                </div>
+            </div>
+        );
+    }
+
+    const values = data.map((point) => point.value);
+    const chartPoints = getChartPoints(values);
+    const polylinePoints = chartPoints
+        .map((point) => `${point.x},${point.y}`)
+        .join(" ");
+    const maxValue = Math.max(...values, 1);
+
+    return (
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="font-semibold text-slate-950">
+                {title}
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+                {description}
+            </p>
+
+            <div className="mt-5 overflow-x-auto">
+                <svg
+                    role="img"
+                    aria-label={title}
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    className="h-[240px] min-w-[420px] rounded-lg bg-slate-50"
+                >
+                    <line
+                        x1="38"
+                        y1="30"
+                        x2="38"
+                        y2="190"
+                        stroke="#cbd5e1"
+                        strokeWidth="1"
+                    />
+                    <line
+                        x1="38"
+                        y1="190"
+                        x2="482"
+                        y2="190"
+                        stroke="#cbd5e1"
+                        strokeWidth="1"
+                    />
+
+                    <text
+                        x="12"
+                        y="35"
+                        className="fill-slate-500 text-[11px]"
+                    >
+                        {maxValue}
+                        {valueSuffix}
+                    </text>
+                    <text
+                        x="20"
+                        y="193"
+                        className="fill-slate-500 text-[11px]"
+                    >
+                        0
+                    </text>
+
+                    <polyline
+                        points={polylinePoints}
+                        fill="none"
+                        stroke="#2563eb"
+                        strokeWidth="3"
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                    />
+
+                    {chartPoints.map((point, index) => (
+                        <g key={`${data[index].period}-${data[index].value}`}>
+                            <circle
+                                cx={point.x}
+                                cy={point.y}
+                                r="4"
+                                fill="#2563eb"
+                            >
+                                <title>
+                                    {data[index].period}: {data[index].value}
+                                    {valueSuffix}
+                                </title>
+                            </circle>
+                            <text
+                                x={point.x}
+                                y="210"
+                                textAnchor="middle"
+                                className="fill-slate-500 text-[10px]"
+                            >
+                                {data[index].period}
+                            </text>
+                        </g>
+                    ))}
+                </svg>
+            </div>
+        </div>
+    );
+}
+
+function mapClosingTrend(data: SalesClosingRateTrendPoint[]) {
+    return data.map((point) => ({
+        period: point.period,
+        value: point.rate,
+    }));
+}
+
+function mapHotLeadsTrend(data: HotLeadsTrendPoint[]) {
+    return data.map((point) => ({
+        period: point.period,
+        value: point.count,
+    }));
+}
+
 export default async function AnalyticsPage() {
     const leadRepository = new LeadRepo();
     const taskRepository = new TaskRepo();
@@ -153,11 +323,33 @@ export default async function AnalyticsPage() {
         tasks,
         notifications
     );
-    const [conversionConfig, qualityConfig, communicationConfig, revenueConfig] =
-        sectionConfig;
+    const [
+        conversionConfig,
+        qualityConfig,
+        trendsConfig,
+        communicationConfig,
+        revenueConfig,
+    ] = sectionConfig;
 
     return (
         <main className="space-y-6 text-slate-900">
+            <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+                <SectionHeader {...trendsConfig} />
+                <div className="grid gap-4 lg:grid-cols-2">
+                    <LineChartCard
+                        title="Sales Closing Rate Trend"
+                        description="Shows how many leads are turning into vehicle deliveries over time."
+                        data={mapClosingTrend(summary.salesClosingRateTrend)}
+                        valueSuffix="%"
+                    />
+                    <LineChartCard
+                        title="Hot Leads Trend"
+                        description="Shows how many high-priority leads are being generated over time."
+                        data={mapHotLeadsTrend(summary.hotLeadsTrend)}
+                    />
+                </div>
+            </section>
+
             <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
                 <SectionHeader {...conversionConfig} />
                 <div className="grid gap-4 md:grid-cols-2">

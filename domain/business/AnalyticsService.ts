@@ -22,6 +22,16 @@ export type AnalyticsNumberMetric = {
     note?: string;
 };
 
+export type SalesClosingRateTrendPoint = {
+    period: string;
+    rate: number;
+};
+
+export type HotLeadsTrendPoint = {
+    period: string;
+    count: number;
+};
+
 export type AnalyticsSummary = {
     conversionPerformance: {
         leadAppointmentRatio: AnalyticsRatioMetric;
@@ -43,6 +53,8 @@ export type AnalyticsSummary = {
         budgetThresholdRatio: AnalyticsRatioMetric;
         budgetThreshold: number;
     };
+    salesClosingRateTrend: SalesClosingRateTrendPoint[];
+    hotLeadsTrend: HotLeadsTrendPoint[];
 };
 
 export class AnalyticsService {
@@ -90,6 +102,9 @@ export class AnalyticsService {
         const leadsAboveBudgetThreshold = leads.filter(
             (lead) => lead.budget >= this.budgetThreshold
         );
+        const salesClosingRateTrend =
+            this.getSalesClosingRateTrend(leads);
+        const hotLeadsTrend = this.getHotLeadsTrend(leads);
 
         return {
             conversionPerformance: {
@@ -183,6 +198,8 @@ export class AnalyticsService {
                 }),
                 budgetThreshold: this.budgetThreshold,
             },
+            salesClosingRateTrend,
+            hotLeadsTrend,
         };
     }
 
@@ -305,6 +322,73 @@ export class AnalyticsService {
 
     private getLeadScore(lead: Lead): number {
         return Math.max(lead.score, this.scoringService.calculateScore(lead));
+    }
+
+    private getSalesClosingRateTrend(
+        leads: Lead[]
+    ): SalesClosingRateTrendPoint[] {
+        const periodMap = this.groupLeadsByCreatedPeriod(leads);
+
+        return [...periodMap.entries()].map(([periodKey, periodLeads]) => {
+            const deliveredCount = periodLeads.filter((lead) =>
+                this.isDelivered(lead)
+            ).length;
+
+            return {
+                period: this.formatPeriodLabel(periodKey),
+                rate:
+                    periodLeads.length === 0
+                        ? 0
+                        : Math.round(
+                              (deliveredCount / periodLeads.length) * 100
+                          ),
+            };
+        });
+    }
+
+    private getHotLeadsTrend(leads: Lead[]): HotLeadsTrendPoint[] {
+        const periodMap = this.groupLeadsByCreatedPeriod(leads);
+
+        return [...periodMap.entries()].map(([periodKey, periodLeads]) => ({
+            period: this.formatPeriodLabel(periodKey),
+            count: periodLeads.filter(
+                (lead) => this.getLeadScore(lead) >= HOT_LEAD_THRESHOLD
+            ).length,
+        }));
+    }
+
+    private groupLeadsByCreatedPeriod(leads: Lead[]): Map<string, Lead[]> {
+        const periodMap = new Map<string, Lead[]>();
+
+        for (const lead of leads) {
+            const periodKey = this.getPeriodKey(lead.createdAt);
+            const periodLeads = periodMap.get(periodKey) ?? [];
+            periodLeads.push(lead);
+            periodMap.set(periodKey, periodLeads);
+        }
+
+        return new Map(
+            [...periodMap.entries()].sort(([periodA], [periodB]) =>
+                periodA.localeCompare(periodB)
+            )
+        );
+    }
+
+    private getPeriodKey(date: Date): string {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+
+        return `${year}-${month}`;
+    }
+
+    private formatPeriodLabel(periodKey: string): string {
+        const [year, month] = periodKey.split("-").map(Number);
+        const date = new Date(year, month - 1, 1);
+
+        return new Intl.DateTimeFormat("en-CA", {
+            month: "short",
+            year: "numeric",
+        }).format(date);
     }
 
     private isActiveLead(lead: Lead): boolean {
