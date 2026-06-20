@@ -28,6 +28,9 @@ export default function LeadTable({ leads }: LeadTableProps) {
     const [scoreFilter, setScoreFilter] = useState("ALL");
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [deletingLeadId, setDeletingLeadId] = useState<number | null>(null);
+    const [updatingStatusLeadId, setUpdatingStatusLeadId] = useState<
+        number | null
+    >(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [creatingLead, setCreatingLead] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
@@ -124,16 +127,41 @@ export default function LeadTable({ leads }: LeadTableProps) {
         );
     };
 
-    const handleStatusChange = (leadId: number, newStatus: boolean) => {
-        const updatedLeads = leadList.map((lead) => {
-            if (lead.leadID === leadId) {
-                lead.status = newStatus;
-            }
+    const handleStatusChange = async (leadId: number, newStatus: boolean) => {
+        setDeleteError(null);
+        setUpdatingStatusLeadId(leadId);
 
-            return lead;
-        });
+        const leadToUpdate = leadList.find((lead) => lead.leadID === leadId);
 
-        setLeadList([...updatedLeads]);
+        if (!leadToUpdate) {
+            setDeleteError("Lead not found.");
+            setUpdatingStatusLeadId(null);
+            return;
+        }
+
+        const previousStatus = leadToUpdate.status;
+        leadToUpdate.status = newStatus;
+
+        setLeadList((currentLeads) =>
+            currentLeads.map((lead) =>
+                lead.leadID === leadId ? leadToUpdate : lead
+            )
+        );
+
+        const leadRepository = new LeadRepo();
+        const error = await leadRepository.updateLead(leadToUpdate);
+
+        setUpdatingStatusLeadId(null);
+
+        if (error) {
+            leadToUpdate.status = previousStatus;
+            setLeadList((currentLeads) =>
+                currentLeads.map((lead) =>
+                    lead.leadID === leadId ? leadToUpdate : lead
+                )
+            );
+            setDeleteError(error);
+        }
     };
 
     const hasActiveFilters =
@@ -386,6 +414,9 @@ export default function LeadTable({ leads }: LeadTableProps) {
                             onViewBrief={setSelectedLead}
                             onDelete={handleDeleteLead}
                             deleting={deletingLeadId === lead.leadID}
+                            updatingStatus={
+                                updatingStatusLeadId === lead.leadID
+                            }
                         />
 
 

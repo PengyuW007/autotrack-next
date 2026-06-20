@@ -5,10 +5,11 @@ import { Lead } from "@/domain/objects/Lead";
 
 interface LeadTableRowProps {
     lead: Lead;
-    onStatusChange: (leadId: number, status: boolean) => void;
+    onStatusChange: (leadId: number, status: boolean) => Promise<void>;
     onViewBrief: (lead: Lead) => void;
     onDelete: (leadId: number) => Promise<void>;
     deleting: boolean;
+    updatingStatus: boolean;
 }
 
 export default function LeadTableRow({
@@ -17,6 +18,7 @@ export default function LeadTableRow({
     onViewBrief,
     onDelete,
     deleting,
+    updatingStatus,
 }: LeadTableRowProps) {
     const formatDate = (date: Date | null | undefined): string => {
         if (!date) {
@@ -39,12 +41,13 @@ export default function LeadTableRow({
                     <select
                         value={lead.status ? "ACTIVE" : "LOST"}
                         onChange={(event) =>
-                            onStatusChange(
+                            void onStatusChange(
                                 lead.leadID,
                                 event.target.value === "ACTIVE"
                             )
                         }
-                        className="rounded border px-2 py-1 text-sm text-gray-900"
+                        disabled={updatingStatus}
+                        className="rounded border px-2 py-1 text-sm text-gray-900 disabled:cursor-wait disabled:bg-slate-100 disabled:text-slate-400"
                     >
                         <option value="ACTIVE">Active</option>
                         <option value="LOST">Lost</option>

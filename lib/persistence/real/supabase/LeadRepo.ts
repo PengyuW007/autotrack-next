@@ -1,5 +1,4 @@
 import { Lead } from "@/domain/objects/Lead";
-import { Vehicle } from "@/domain/objects/Vehicle";
 import { supabase } from "@/lib/supabase/client";
 
 type LeadRow = {
@@ -15,8 +14,6 @@ type LeadRow = {
     lead_country: string | null;
     lead_postal_code: string | null;
     budget: number | null;
-    vehicle_interest_id: number | null;
-    trade_in_vehicle_id: number | null;
     stage: string | null;
     follow_up_date: string | null;
     score: number | null;
@@ -41,16 +38,6 @@ function toDate(value: string | null, fallback = new Date()): Date {
     return new Date(value);
 }
 
-function createVehicleReference(vehicleId: number | null): Vehicle | null {
-    if (!vehicleId) {
-        return null;
-    }
-
-    const vehicle = new Vehicle();
-    vehicle.vehicleID = vehicleId;
-    return vehicle;
-}
-
 function mapRowToLead(row: LeadRow): Lead {
     return new Lead({
         leadID: row.lead_id,
@@ -65,8 +52,8 @@ function mapRowToLead(row: LeadRow): Lead {
         leadCountry: row.lead_country ?? "Canada",
         leadPostalCode: row.lead_postal_code ?? "",
         budget: row.budget ?? 0,
-        vehicleInterest: createVehicleReference(row.vehicle_interest_id),
-        tradeInVehicle: createVehicleReference(row.trade_in_vehicle_id),
+        vehicleInterest: null,
+        tradeInVehicle: null,
         stage: row.stage ?? "NEW",
         followUpDate: toDate(row.follow_up_date),
         score: row.score ?? 0,
@@ -93,8 +80,6 @@ function mapLeadToRow(lead: Lead): LeadInsertRow {
         lead_country: lead.leadCountry,
         lead_postal_code: lead.leadPostalCode,
         budget: lead.budget,
-        vehicle_interest_id: lead.vehicleInterest?.vehicleID ?? null,
-        trade_in_vehicle_id: lead.tradeInVehicle?.vehicleID ?? null,
         stage: lead.stage,
         follow_up_date: lead.followUpDate.toISOString(),
         score: lead.score,
