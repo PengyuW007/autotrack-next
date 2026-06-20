@@ -333,7 +333,7 @@ export default function LeadTable({ leads }: LeadTableProps) {
                         <option value="VISITED">Visited</option>
                         <option value="TEST_DRIVE">Test Drive</option>
                         <option value="NEGOTIATION">Negotiation</option>
-                        <option value="CLOSED">Closed</option>
+                        <option value="DELIVERED">Delivered</option>
                     </select>
 
                     <select

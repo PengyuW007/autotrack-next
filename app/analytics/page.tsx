@@ -1,345 +1,271 @@
 import {
     Activity,
-    BarChart3,
-    CalendarClock,
+    CalendarCheck,
     CheckCircle2,
     CircleDollarSign,
     Gauge,
-    PieChart,
+    MessageSquareReply,
     TrendingUp,
     Users,
 } from "lucide-react";
 
+import {
+    AnalyticsNumberMetric,
+    AnalyticsRatioMetric,
+    AnalyticsService,
+} from "@/domain/business/AnalyticsService";
+import { ScoringService } from "@/domain/business/ScoringService";
 import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
+import { NotificationRepo } from "@/lib/persistence/real/supabase/NotificationRepo";
 import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
 
-const moneyFormatter = new Intl.NumberFormat("en-CA", {
-    style: "currency",
-    currency: "CAD",
-    maximumFractionDigits: 0,
-});
+const sectionConfig = [
+    {
+        title: "Conversion Performance",
+        description: "How effectively leads move into appointments and deliveries.",
+        icon: TrendingUp,
+    },
+    {
+        title: "Lead Quality",
+        description: "Current pipeline health and high-intent opportunity mix.",
+        icon: Gauge,
+    },
+    {
+        title: "Communication Effectiveness",
+        description: "Customer engagement, two-way conversations, and follow-up discipline.",
+        icon: MessageSquareReply,
+    },
+    {
+        title: "Revenue Insights",
+        description: "Budget quality and margin-related delivery indicators.",
+        icon: CircleDollarSign,
+    },
+];
 
-const percentFormatter = new Intl.NumberFormat("en-CA", {
-    maximumFractionDigits: 0,
-});
-
-function getPercent(value: number, total: number) {
-    if (total === 0) {
-        return 0;
-    }
-
-    return Math.round((value / total) * 100);
+function formatPercent(value: number): string {
+    return `${value}%`;
 }
 
-function formatDate(date: Date | null | undefined) {
-    if (!date) {
-        return "No activity";
-    }
+function formatNumber(value: number): string {
+    return new Intl.NumberFormat("en-CA", {
+        maximumFractionDigits: 1,
+    }).format(value);
+}
 
-    return new Intl.DateTimeFormat("en-CA", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-    }).format(date);
+function RatioCard({ metric }: { metric: AnalyticsRatioMetric }) {
+    return (
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                    <p className="text-sm font-medium text-slate-500">
+                        {metric.label}
+                    </p>
+                    <h3 className="mt-2 text-3xl font-bold text-slate-950">
+                        {formatPercent(metric.percentage)}
+                    </h3>
+                </div>
+
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                    {metric.numerator}/{metric.denominator}
+                </span>
+            </div>
+
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                    className="h-full rounded-full bg-blue-600"
+                    style={{ width: `${metric.percentage}%` }}
+                />
+            </div>
+
+            <p className="mt-3 text-sm text-slate-500">
+                {metric.description}
+            </p>
+
+            {metric.note ? (
+                <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    {metric.note}
+                </p>
+            ) : null}
+        </div>
+    );
+}
+
+function NumberCard({ metric }: { metric: AnalyticsNumberMetric }) {
+    return (
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">
+                {metric.label}
+            </p>
+            <h3 className="mt-2 text-3xl font-bold text-slate-950">
+                {formatNumber(metric.value)}
+            </h3>
+            <p className="mt-3 text-sm text-slate-500">
+                {metric.description}
+            </p>
+
+            {metric.note ? (
+                <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    {metric.note}
+                </p>
+            ) : null}
+        </div>
+    );
+}
+
+function SectionHeader({
+    title,
+    description,
+    icon: Icon,
+}: {
+    title: string;
+    description: string;
+    icon: typeof Activity;
+}) {
+    return (
+        <div className="mb-5 flex items-center justify-between gap-4">
+            <div>
+                <h2 className="text-lg font-bold text-slate-950">
+                    {title}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                    {description}
+                </p>
+            </div>
+            <Icon className="shrink-0 text-blue-600" size={22} />
+        </div>
+    );
 }
 
 export default async function AnalyticsPage() {
     const leadRepository = new LeadRepo();
     const taskRepository = new TaskRepo();
+    const notificationRepository = new NotificationRepo();
+    const analyticsService = new AnalyticsService(new ScoringService());
 
-    const [leads, tasks] = await Promise.all([
+    const [leads, tasks, notifications] = await Promise.all([
         leadRepository.getAllLeads(),
         taskRepository.getAllTasks(),
+        notificationRepository.getAllNotifications(),
     ]);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const totalLeads = leads.length;
-    const activeLeads = leads.filter((lead) => lead.status).length;
-    const closedLeads = leads.filter((lead) => !lead.status).length;
-    const hotLeads = leads.filter((lead) => lead.score >= 80).length;
-    const tradeInLeads = leads.filter((lead) => lead.tradeInVehicle !== null).length;
-    const averageScore =
-        totalLeads === 0
-            ? 0
-            : Math.round(
-                  leads.reduce((total, lead) => total + lead.score, 0) / totalLeads
-              );
-    const totalPipeline = leads.reduce((total, lead) => total + lead.budget, 0);
-    const overdueTasks = tasks.filter((task) => {
-        const taskDate = new Date(task.getDate());
-        taskDate.setHours(0, 0, 0, 0);
-
-        return !task.isCompleted() && taskDate < today;
-    }).length;
-
-    const stageCounts = leads.reduce<Record<string, number>>((counts, lead) => {
-        const stage = lead.stage || "UNKNOWN";
-        counts[stage] = (counts[stage] ?? 0) + 1;
-        return counts;
-    }, {});
-
-    const stageRows = Object.entries(stageCounts).sort(
-        ([stageA], [stageB]) => stageA.localeCompare(stageB)
+    const summary = analyticsService.getAnalyticsSummary(
+        leads,
+        tasks,
+        notifications
     );
-
-    const scoreBands = [
-        {
-            label: "Hot",
-            detail: "80+ score",
-            count: leads.filter((lead) => lead.score >= 80).length,
-            color: "bg-green-500",
-        },
-        {
-            label: "Warm",
-            detail: "50 - 79 score",
-            count: leads.filter((lead) => lead.score >= 50 && lead.score < 80).length,
-            color: "bg-blue-500",
-        },
-        {
-            label: "Cold",
-            detail: "Below 50 score",
-            count: leads.filter((lead) => lead.score < 50).length,
-            color: "bg-slate-400",
-        },
-    ];
-
-    const topLeads = [...leads]
-        .sort((leadA, leadB) => leadB.score - leadA.score)
-        .slice(0, 4);
-
-    const metricCards = [
-        {
-            title: "Total Leads",
-            value: totalLeads.toString(),
-            description: `${activeLeads} active, ${closedLeads} lost`,
-            icon: Users,
-        },
-        {
-            title: "Average Score",
-            value: averageScore.toString(),
-            description: `${hotLeads} leads scoring 80+`,
-            icon: Gauge,
-        },
-        {
-            title: "Pipeline Budget",
-            value: moneyFormatter.format(totalPipeline),
-            description: "Declared customer budgets",
-            icon: CircleDollarSign,
-        },
-        {
-            title: "Overdue Tasks",
-            value: overdueTasks.toString(),
-            description: "Open follow-ups past due",
-            icon: CalendarClock,
-        },
-    ];
+    const [conversionConfig, qualityConfig, communicationConfig, revenueConfig] =
+        sectionConfig;
 
     return (
-        <main className="text-slate-900">
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {metricCards.map((card) => {
-                    const Icon = card.icon;
-
-                    return (
-                        <div
-                            key={card.title}
-                            className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
-                        >
-                            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                                <Icon size={22} />
-                            </div>
-
-                            <p className="text-sm font-medium text-slate-500">
-                                {card.title}
-                            </p>
-                            <h2 className="mt-2 text-3xl font-bold text-slate-950">
-                                {card.value}
-                            </h2>
-                            <p className="mt-2 text-sm text-slate-500">
-                                {card.description}
-                            </p>
-                        </div>
-                    );
-                })}
-            </section>
-
-            <section className="mt-6 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-                <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-                    <div className="mb-5 flex items-center justify-between">
-                        <div>
-                            <h2 className="text-lg font-bold text-slate-950">
-                                Stage Distribution
-                            </h2>
-                            <p className="mt-1 text-sm text-slate-500">
-                                Where leads currently sit in the sales process.
-                            </p>
-                        </div>
-                        <BarChart3 className="text-blue-600" size={22} />
-                    </div>
-
-                    <div className="space-y-4">
-                        {stageRows.map(([stage, count]) => {
-                            const percent = getPercent(count, totalLeads);
-
-                            return (
-                                <div key={stage}>
-                                    <div className="mb-2 flex items-center justify-between text-sm">
-                                        <span className="font-medium text-slate-700">
-                                            {stage.replace("_", " ")}
-                                        </span>
-                                        <span className="text-slate-500">
-                                            {count} lead{count === 1 ? "" : "s"} - {percentFormatter.format(percent)}%
-                                        </span>
-                                    </div>
-                                    <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-                                        <div
-                                            className="h-full rounded-full bg-blue-600"
-                                            style={{ width: `${percent}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-                    <div className="mb-5 flex items-center justify-between">
-                        <div>
-                            <h2 className="text-lg font-bold text-slate-950">
-                                Lead Quality
-                            </h2>
-                            <p className="mt-1 text-sm text-slate-500">
-                                Score bands and trade-in opportunity mix.
-                            </p>
-                        </div>
-                        <PieChart className="text-blue-600" size={22} />
-                    </div>
-
-                    <div className="space-y-4">
-                        {scoreBands.map((band) => {
-                            const percent = getPercent(band.count, totalLeads);
-
-                            return (
-                                <div key={band.label} className="rounded-lg bg-slate-50 p-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="font-semibold text-slate-950">
-                                                {band.label}
-                                            </p>
-                                            <p className="text-sm text-slate-500">
-                                                {band.detail}
-                                            </p>
-                                        </div>
-                                        <span className="text-lg font-bold text-slate-950">
-                                            {band.count}
-                                        </span>
-                                    </div>
-                                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-                                        <div
-                                            className={`h-full rounded-full ${band.color}`}
-                                            style={{ width: `${percent}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    <div className="mt-4 flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
-                        <TrendingUp size={20} />
-                        <span>
-                            {tradeInLeads} of {totalLeads} leads have trade-in potential.
-                        </span>
-                    </div>
+        <main className="space-y-6 text-slate-900">
+            <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+                <SectionHeader {...conversionConfig} />
+                <div className="grid gap-4 md:grid-cols-2">
+                    <RatioCard
+                        metric={
+                            summary.conversionPerformance
+                                .leadAppointmentRatio
+                        }
+                    />
+                    <RatioCard
+                        metric={
+                            summary.conversionPerformance.leadDeliveryRatio
+                        }
+                    />
                 </div>
             </section>
 
-            <section className="mt-6 grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-                <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-                    <div className="mb-5 flex items-center justify-between">
-                        <h2 className="text-lg font-bold text-slate-950">
-                            Top Lead Opportunities
-                        </h2>
-                        <Activity className="text-blue-600" size={22} />
-                    </div>
+            <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+                <SectionHeader {...qualityConfig} />
+                <div className="grid gap-4 md:grid-cols-2">
+                    <RatioCard metric={summary.leadQuality.activeLeadRatio} />
+                    <RatioCard metric={summary.leadQuality.hotLeadRatio} />
+                </div>
+            </section>
 
-                    <div className="space-y-3">
-                        {topLeads.map((lead) => (
-                            <div
-                                key={lead.leadID}
-                                className="flex items-center justify-between rounded-lg border border-slate-200 p-4"
-                            >
-                                <div>
-                                    <p className="font-semibold text-slate-950">
-                                        {lead.getLeadName()}
-                                    </p>
-                                    <p className="mt-1 text-sm text-slate-500">
-                                        {lead.vehicleInterest?.getFullDescription() ?? "No vehicle selected"}
-                                    </p>
-                                </div>
+            <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+                <SectionHeader {...communicationConfig} />
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <RatioCard
+                        metric={
+                            summary.communicationEffectiveness
+                                .engagementRatio
+                        }
+                    />
+                    <RatioCard
+                        metric={
+                            summary.communicationEffectiveness
+                                .twoWayCommunicationRatio
+                        }
+                    />
+                    <RatioCard
+                        metric={
+                            summary.communicationEffectiveness
+                                .followUpCompletionRatio
+                        }
+                    />
+                    <RatioCard
+                        metric={
+                            summary.communicationEffectiveness
+                                .onTimeFollowUpRatio
+                        }
+                    />
+                    <NumberCard
+                        metric={
+                            summary.communicationEffectiveness
+                                .averageTouchpointsPerLead
+                        }
+                    />
+                </div>
+            </section>
 
-                                <div className="text-right">
-                                    <p className="text-lg font-bold text-blue-600">
-                                        {Math.floor(lead.score)}
-                                    </p>
-                                    <p className="text-xs text-slate-500">
-                                        {lead.stage}
-                                    </p>
-                                </div>
-                            </div>
-                        ))}
+            <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+                <SectionHeader {...revenueConfig} />
+                <div className="grid gap-4 md:grid-cols-2">
+                    <RatioCard
+                        metric={summary.revenueInsights.highValueLeadRatio}
+                    />
+                    <RatioCard
+                        metric={summary.revenueInsights.budgetThresholdRatio}
+                    />
+                </div>
+            </section>
+
+            <section className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                        <Users size={22} />
                     </div>
+                    <p className="text-sm font-medium text-slate-500">
+                        Data Source
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                        Calculated from real Leads, Tasks, and Notifications repositories.
+                    </p>
                 </div>
 
-                <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-                    <div className="mb-5 flex items-center justify-between">
-                        <h2 className="text-lg font-bold text-slate-950">
-                            Follow-up Health
-                        </h2>
-                        <CheckCircle2 className="text-blue-600" size={22} />
+                <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                        <CalendarCheck size={22} />
                     </div>
+                    <p className="text-sm font-medium text-slate-500">
+                        Appointment Detection
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                        Appointment ratios use appointment-related task and notification records.
+                    </p>
+                </div>
 
-                    <div className="overflow-hidden rounded-lg border border-slate-200">
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-slate-100 text-slate-700">
-                                <tr>
-                                    <th className="px-4 py-3">Lead</th>
-                                    <th className="px-4 py-3">Last Interaction</th>
-                                    <th className="px-4 py-3">Next Follow-up</th>
-                                    <th className="px-4 py-3">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {leads.map((lead) => (
-                                    <tr key={lead.leadID} className="border-t border-slate-200">
-                                        <td className="px-4 py-3 font-medium text-slate-950">
-                                            {lead.getLeadName()}
-                                        </td>
-                                        <td className="px-4 py-3 text-slate-600">
-                                            {formatDate(lead.lastInteractionDate)}
-                                        </td>
-                                        <td className="px-4 py-3 text-slate-600">
-                                            {formatDate(lead.followUpDate)}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span
-                                                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                                    lead.status
-                                                        ? "bg-green-50 text-green-700"
-                                                        : "bg-red-50 text-red-700"
-                                                }`}
-                                            >
-                                                {lead.status ? "Active" : "Lost"}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                        <CheckCircle2 size={22} />
                     </div>
+                    <p className="text-sm font-medium text-slate-500">
+                        Extensible Summary
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                        New metrics can be added to AnalyticsSummary without changing repository boundaries.
+                    </p>
                 </div>
             </section>
         </main>
