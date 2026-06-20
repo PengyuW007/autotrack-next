@@ -81,7 +81,9 @@ export class RecentActivityService {
             .filter(
                 (activity) =>
                     activity.source === "lead" &&
-                    ["message", "email", "call"].includes(activity.type)
+                    ["message", "email", "call", "appointment"].includes(
+                        activity.type
+                    )
             )
             .sort(
                 (activityA, activityB) =>
@@ -241,20 +243,25 @@ export class RecentActivityService {
         const normalizedTitle = title.toLowerCase();
 
         if (
-            normalizedTitle.includes("sent you") ||
-            normalizedTitle.includes("replied") ||
-            normalizedTitle.includes("called you") ||
-            normalizedTitle.includes("incoming")
+            normalizedTitle.includes("you sent") ||
+            normalizedTitle.includes("you called") ||
+            normalizedTitle.includes("you emailed") ||
+            normalizedTitle.includes("you booked") ||
+            normalizedTitle.includes("you confirmed")
         ) {
-            return "lead";
+            return "user";
         }
 
         if (
-            normalizedTitle.includes("you sent") ||
-            normalizedTitle.includes("you called") ||
-            normalizedTitle.includes("you emailed")
+            normalizedTitle.includes("sent you") ||
+            normalizedTitle.includes("replied") ||
+            normalizedTitle.includes("called you") ||
+            normalizedTitle.includes("incoming") ||
+            normalizedTitle.includes("confirmed appointment") ||
+            normalizedTitle.includes("appointment confirmed") ||
+            normalizedTitle.includes("confirmed test drive")
         ) {
-            return "user";
+            return "lead";
         }
 
         return "system";
@@ -275,6 +282,10 @@ export class RecentActivityService {
 
             if (type === "email") {
                 return "Incoming email";
+            }
+
+            if (type === "appointment") {
+                return "Incoming appointment";
             }
         }
 

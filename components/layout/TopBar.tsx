@@ -24,6 +24,8 @@ import {
 import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
 import { NotificationRepo } from "@/lib/persistence/real/supabase/NotificationRepo";
 
+const READ_NOTIFICATION_STORAGE_KEY = "autotrack-read-topbar-notifications";
+
 function getActivityIcon(type: RecentActivityType) {
     switch (type) {
         case "lead_added":
@@ -83,6 +85,37 @@ export default function TopBar() {
     const [topbarNotifications, setTopbarNotifications] = useState<
         RecentActivityItem[]
     >([]);
+    const [readNotificationIds, setReadNotificationIds] = useState<string[]>(
+        () => {
+            if (typeof window === "undefined") {
+                return [];
+            }
+
+            const savedReadNotificationIds = window.localStorage.getItem(
+                READ_NOTIFICATION_STORAGE_KEY
+            );
+
+            if (!savedReadNotificationIds) {
+                return [];
+            }
+
+            try {
+                const parsedReadNotificationIds = JSON.parse(
+                    savedReadNotificationIds
+                );
+
+                if (Array.isArray(parsedReadNotificationIds)) {
+                    return parsedReadNotificationIds.filter(
+                        (value): value is string => typeof value === "string"
+                    );
+                }
+            } catch {
+                window.localStorage.removeItem(READ_NOTIFICATION_STORAGE_KEY);
+            }
+
+            return [];
+        }
+    );
     const [notificationsLoading, setNotificationsLoading] = useState(true);
 
     const date = currentTime.toLocaleDateString(
@@ -152,8 +185,25 @@ export default function TopBar() {
         };
     }, [pathname]);
 
+    function markNotificationRead(activityId: string) {
+        setReadNotificationIds((currentReadIds) => {
+            if (currentReadIds.includes(activityId)) {
+                return currentReadIds;
+            }
+
+            const nextReadIds = [...currentReadIds, activityId];
+            window.localStorage.setItem(
+                READ_NOTIFICATION_STORAGE_KEY,
+                JSON.stringify(nextReadIds)
+            );
+
+            return nextReadIds;
+        });
+    }
+
     const unreadCount = topbarNotifications.filter(
-        (activity) => activity.unread
+        (activity) =>
+            activity.unread && !readNotificationIds.includes(activity.id)
     ).length;
 
     return (
@@ -195,7 +245,7 @@ export default function TopBar() {
                                         Notifications
                                     </p>
                                     <p className="text-xs text-slate-500">
-                                        Incoming lead messages, emails, and calls
+                                        Incoming lead messages, emails, calls, and appointments
                                     </p>
                                 </div>
                                 {unreadCount > 0 ? (
@@ -221,6 +271,11 @@ export default function TopBar() {
 
                                 {topbarNotifications.map((activity) => {
                                     const Icon = getActivityIcon(activity.type);
+                                    const isUnread =
+                                        activity.unread &&
+                                        !readNotificationIds.includes(
+                                            activity.id
+                                        );
 
                                     return (
                                         <Link
@@ -230,14 +285,17 @@ export default function TopBar() {
                                                     ? `/leads/${activity.leadId}`
                                                     : "/dashboard"
                                             }
-                                            onClick={() =>
-                                                setNotificationsOpen(false)
-                                            }
+                                            onClick={() => {
+                                                markNotificationRead(
+                                                    activity.id
+                                                );
+                                                setNotificationsOpen(false);
+                                            }}
                                             className="flex gap-3 rounded-lg px-3 py-3 transition hover:bg-blue-50"
                                         >
                                             <div
                                                 className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-                                                    activity.unread
+                                                    isUnread
                                                         ? "bg-red-50 text-red-600"
                                                         : "bg-slate-100 text-slate-600"
                                                 }`}
@@ -249,7 +307,7 @@ export default function TopBar() {
                                                     <p className="truncate text-sm font-semibold text-slate-950">
                                                         {activity.label}
                                                     </p>
-                                                    {activity.unread ? (
+                                                    {isUnread ? (
                                                         <span className="h-2 w-2 shrink-0 rounded-full bg-red-600" />
                                                     ) : null}
                                                 </div>
