@@ -31,6 +31,7 @@ export type DashboardPriorityItem = {
     stage: string;
     status: string;
     score: number;
+    priorityLevel: string;
     reason: string;
     tone: "red" | "amber" | "blue";
 };
@@ -160,16 +161,18 @@ export class DashboardService {
     getHighPriorityLeads(leads: Lead[]): Lead[] {
         return [...leads]
             .map((lead) => {
-                lead.updateScore(
-                    Math.max(
-                        lead.score,
-                        this.scoringService.calculateScore(lead)
-                    )
-                );
-                return lead;
+                const priority = this.scoringService.calculatePriority(lead);
+                lead.updateScore(priority.score);
+                return { lead, priority };
             })
-            .filter((lead) => lead.score >= this.highPriorityThreshold)
-            .sort((leadA, leadB) => leadB.score - leadA.score);
+            .filter(
+                ({ priority }) =>
+                    priority.level === "HOT" || priority.level === "HIGH"
+            )
+            .sort(
+                (leadA, leadB) => leadB.priority.score - leadA.priority.score
+            )
+            .map(({ lead }) => lead);
     }
 
     getRecentActivities(
@@ -210,6 +213,8 @@ export class DashboardService {
     }
 
     private toPriorityItem(lead: Lead): DashboardPriorityItem {
+        const priority = this.scoringService.calculatePriority(lead);
+
         return {
             leadId: lead.leadID,
             leadName: lead.getLeadName(),
@@ -218,9 +223,10 @@ export class DashboardService {
                 "No vehicle interest listed",
             stage: lead.stage,
             status: lead.status ? "Active" : "Lost",
-            score: Math.floor(lead.score),
-            reason: "High priority lead based on score.",
-            tone: this.getPriorityTone(lead.score),
+            score: Math.floor(priority.score),
+            priorityLevel: priority.level,
+            reason: priority.reasons[0] ?? "High priority lead based on score.",
+            tone: this.getPriorityTone(priority.score),
         };
     }
 

@@ -22,6 +22,7 @@ import {
     X,
 } from "lucide-react";
 
+import { ScoringService } from "@/domain/business/ScoringService";
 import { Lead } from "@/domain/objects/Lead";
 import { Notification } from "@/domain/objects/Notification";
 import { Task } from "@/domain/objects/Task";
@@ -66,6 +67,8 @@ export interface LeadDetailViewModel {
     stage: string;
     followUpDate: string;
     score: number;
+    priorityLevel: string;
+    priorityReasons: string[];
     notes: string;
     createdAt: string;
     lastInteractionDate: string;
@@ -86,7 +89,6 @@ const stageOptions = [
     "TEST_DRIVE",
     "NEGOTIATION",
     "CLOSED",
-    "WORKING",
 ];
 
 const currencyFormatter = new Intl.NumberFormat("en-CA", {
@@ -242,6 +244,7 @@ export default function LeadDetailPanel({
     const [draftTaskTitle, setDraftTaskTitle] = useState("");
     const [draftTaskDate, setDraftTaskDate] = useState("");
     const [draftTaskTime, setDraftTaskTime] = useState("");
+    const scoringService = useMemo(() => new ScoringService(), []);
 
     const fullName = useMemo(
         () => `${currentLead.firstName} ${currentLead.lastName}`.trim(),
@@ -266,16 +269,33 @@ export default function LeadDetailPanel({
 
         try {
             const leadRepository = new LeadRepo();
-            const error = await leadRepository.updateLead(
-                createLeadFromViewModel(draftLead)
-            );
+            const normalizedDraftLead = {
+                ...draftLead,
+                status:
+                    draftLead.stage.toUpperCase() === "CLOSED"
+                        ? false
+                        : draftLead.status,
+            };
+            const leadToSave = createLeadFromViewModel(normalizedDraftLead);
+            const priority = scoringService.calculatePriority(leadToSave);
+            leadToSave.updateScore(priority.score);
+
+            const error = await leadRepository.updateLead(leadToSave);
 
             if (error) {
                 setErrorMessage(error);
                 return;
             }
 
-            setCurrentLead(draftLead);
+            const nextLead = {
+                ...normalizedDraftLead,
+                score: priority.score,
+                priorityLevel: priority.level,
+                priorityReasons: priority.reasons,
+            };
+
+            setCurrentLead(nextLead);
+            setDraftLead(nextLead);
             setIsEditing(false);
             router.refresh();
         } catch (error) {
@@ -682,7 +702,7 @@ export default function LeadDetailPanel({
                     </div>
                 </div>
 
-                <div className="mt-6 grid gap-4 md:grid-cols-3">
+                <div className="mt-6 grid gap-4 md:grid-cols-4">
                     <div className="rounded-lg bg-slate-50 p-4">
                         <p className="text-sm font-medium text-slate-500">Stage</p>
                         <p className="mt-2 text-xl font-bold text-slate-950">
@@ -693,6 +713,26 @@ export default function LeadDetailPanel({
                         <p className="text-sm font-medium text-slate-500">Score</p>
                         <p className="mt-2 text-xl font-bold text-slate-950">
                             {Math.floor(currentLead.score)}
+                        </p>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-4">
+                        <p className="text-sm font-medium text-slate-500">
+                            Priority
+                        </p>
+                        <p
+                            className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-bold ${
+                                currentLead.priorityLevel === "HOT"
+                                    ? "bg-red-100 text-red-700"
+                                    : currentLead.priorityLevel === "HIGH"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : currentLead.priorityLevel === "MEDIUM"
+                                        ? "bg-blue-100 text-blue-700"
+                                        : currentLead.priorityLevel === "CLOSED"
+                                          ? "bg-slate-200 text-slate-600"
+                                          : "bg-slate-100 text-slate-600"
+                            }`}
+                        >
+                            {currentLead.priorityLevel}
                         </p>
                     </div>
                     <div className="rounded-lg bg-slate-50 p-4">
@@ -708,6 +748,17 @@ export default function LeadDetailPanel({
                             {currentLead.status ? "Active" : "Lost"}
                         </p>
                     </div>
+                </div>
+
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-sm font-semibold text-slate-950">
+                        Why this priority?
+                    </p>
+                    <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                        {currentLead.priorityReasons.map((reason) => (
+                            <li key={reason}>- {reason}</li>
+                        ))}
+                    </ul>
                 </div>
             </section>
 
@@ -806,13 +857,13 @@ export default function LeadDetailPanel({
                             <input
                                 type="number"
                                 min={0}
-                                max={150}
                                 value={draftLead.score}
-                                onChange={(event) =>
-                                    updateDraft("score", Number(event.target.value))
-                                }
-                                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
+                                readOnly
+                                className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-slate-500"
                             />
+                            <span className="mt-1 block text-xs text-slate-500">
+                                Score recalculates automatically when saved.
+                            </span>
                         </label>
                         <label className="text-sm font-medium text-slate-700">
                             Follow-up Date

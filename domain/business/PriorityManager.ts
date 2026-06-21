@@ -1,5 +1,8 @@
 import { Lead } from "@/domain/objects/Lead";
-import { ScoringService } from "@/domain/business/ScoringService";
+import {
+    LeadPriorityResult,
+    ScoringService,
+} from "@/domain/business/ScoringService";
 
 export class PriorityManager {
     private scoringService: ScoringService;
@@ -15,11 +18,11 @@ export class PriorityManager {
 
         if (inputLeads) {
             for (const lead of inputLeads) {
-                if (lead.score === 0) {
-                    lead.updateScore(this.scoringService.calculateScore(lead));
-                }
+                const priority = this.getPriorityForLead(lead);
 
-                this.priorityQueue.push(lead);
+                if (priority.level !== "CLOSED") {
+                    this.priorityQueue.push(lead);
+                }
             }
         }
 
@@ -29,10 +32,17 @@ export class PriorityManager {
     addOrUpdateLead(lead: Lead): void {
         this.removeLead(lead);
 
-        const score = this.scoringService.calculateScore(lead);
-        lead.updateScore(score);
+        const priority = this.getPriorityForLead(lead);
 
-        this.priorityQueue.push(lead);
+        if (priority.level !== "CLOSED") {
+            this.priorityQueue.push(lead);
+        }
+    }
+
+    getPriorityForLead(lead: Lead): LeadPriorityResult {
+        const priority = this.scoringService.calculatePriority(lead);
+        lead.updateScore(priority.score);
+        return priority;
     }
 
     removeLead(lead: Lead): void {
@@ -52,8 +62,38 @@ export class PriorityManager {
     }
 
     getAllLeadsSorted(): Lead[] {
-        return [...this.priorityQueue].sort(
-            (leadA, leadB) => leadB.score - leadA.score
-        );
+        return [...this.priorityQueue]
+            .filter(
+                (lead) =>
+                    this.scoringService.calculatePriority(lead).level !==
+                    "CLOSED"
+            )
+            .sort((leadA, leadB) => {
+                const priorityA = this.scoringService.calculatePriority(leadA);
+                const priorityB = this.scoringService.calculatePriority(leadB);
+                leadA.updateScore(priorityA.score);
+                leadB.updateScore(priorityB.score);
+
+                return (
+                    this.getPriorityRank(priorityB.level) -
+                        this.getPriorityRank(priorityA.level) ||
+                    priorityB.score - priorityA.score
+                );
+            });
+    }
+
+    private getPriorityRank(priorityLevel: LeadPriorityResult["level"]): number {
+        switch (priorityLevel) {
+            case "HOT":
+                return 4;
+            case "HIGH":
+                return 3;
+            case "MEDIUM":
+                return 2;
+            case "LOW":
+                return 1;
+            default:
+                return 0;
+        }
     }
 }

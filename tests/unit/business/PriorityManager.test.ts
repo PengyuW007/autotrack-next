@@ -17,8 +17,8 @@ describe("PriorityManager", () => {
     test("sorts leads by score descending", () => {
         const priorityManager = new PriorityManager(scoringService);
 
-        const lowLead = new Lead({ leadID: 1, firstName: "Low", stage: "NEW", score: 40 });
-        const highLead = new Lead({ leadID: 2, firstName: "High", stage: "NEGOTIATION", score: 160 });
+        const lowLead = new Lead({ leadID: 1, firstName: "Low", stage: "NEW", score: 20 });
+        const highLead = new Lead({ leadID: 2, firstName: "High", stage: "NEGOTIATION", score: 110 });
 
         const result = priorityManager.getPrioritizedList([lowLead, highLead]);
 
@@ -39,7 +39,25 @@ describe("PriorityManager", () => {
 
         const result = priorityManager.getPrioritizedList([lead]);
 
-        expect(result[0].score).toBe(160);
+        expect(result[0].score).toBe(110);
+    });
+
+    test("recalculates stale score when lead stage changes", () => {
+        const priorityManager = new PriorityManager(scoringService);
+
+        const lead = new Lead({
+            leadID: 1,
+            firstName: "Stage",
+            stage: "VISITED",
+            score: 200,
+            createdAt: new Date(),
+        });
+
+        lead.stage = "NEW";
+
+        const result = priorityManager.getPrioritizedList([lead]);
+
+        expect(result[0].score).toBe(20);
     });
 
     test("adds lead into priority queue", () => {
@@ -75,7 +93,23 @@ describe("PriorityManager", () => {
         const result = priorityManager.getAllLeadsSorted();
 
         expect(result.length).toBe(1);
-        expect(result[0].score).toBe(160);
+        expect(result[0].score).toBe(110);
+    });
+
+    test("excludes closed leads from priority queue", () => {
+        const priorityManager = new PriorityManager(scoringService);
+
+        const closedLead = new Lead({
+            leadID: 1,
+            firstName: "Closed",
+            stage: "CLOSED",
+            createdAt: new Date(),
+        });
+
+        priorityManager.addOrUpdateLead(closedLead);
+
+        expect(priorityManager.peekTopLead()).toBeNull();
+        expect(priorityManager.getPriorityForLead(closedLead).level).toBe("CLOSED");
     });
 
     test("removes lead from priority queue", () => {

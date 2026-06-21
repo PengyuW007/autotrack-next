@@ -122,6 +122,55 @@ describe("AgendaService", () => {
         expect(result[1].leadID).toBe(1);
     });
 
+    test("excludes closed leads and sorts hot and high leads first", () => {
+        const agendaService = createService();
+        const targetDate = new Date("2026-06-20");
+
+        const closedLead = new Lead({
+            leadID: 1,
+            firstName: "Closed",
+            stage: "CLOSED",
+            followUpDate: targetDate,
+            notes: "urgent ready price",
+            createdAt: new Date("2026-06-01"),
+        });
+
+        const mediumLead = new Lead({
+            leadID: 2,
+            firstName: "Medium",
+            stage: "VISITED",
+            followUpDate: targetDate,
+            createdAt: new Date("2026-06-20"),
+        });
+
+        const highLead = new Lead({
+            leadID: 3,
+            firstName: "High",
+            stage: "NEGOTIATION",
+            followUpDate: targetDate,
+            createdAt: new Date("2026-06-20"),
+        });
+
+        const hotLead = new Lead({
+            leadID: 4,
+            firstName: "Hot",
+            stage: "NEGOTIATION",
+            followUpDate: targetDate,
+            notes: "urgent and ready",
+            createdAt: new Date("2026-06-18"),
+            lastInteractionDate: new Date("2026-06-20"),
+            lastInteractionBy: "LEAD",
+        });
+
+        const result = agendaService.getTodayAgenda(
+            [closedLead, mediumLead, highLead, hotLead],
+            [],
+            targetDate
+        );
+
+        expect(result.map((lead) => lead.leadID)).toEqual([4, 3, 2]);
+    });
+
     test("generates system assigned task and avoids duplicate task", () => {
         const agendaService = createService();
         const targetDate = new Date("2026-06-20");

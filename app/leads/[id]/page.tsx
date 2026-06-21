@@ -5,6 +5,7 @@ import LeadDetailPanel, {
     LeadDetailTaskViewModel,
     LeadDetailViewModel,
 } from "@/components/leads/LeadDetailPanel";
+import { ScoringService } from "@/domain/business/ScoringService";
 import { Lead } from "@/domain/objects/Lead";
 import { Notification } from "@/domain/objects/Notification";
 import { Task } from "@/domain/objects/Task";
@@ -38,7 +39,12 @@ function toTimeInputValue(date: Date | null | undefined) {
     return `${hours}:${minutes}`;
 }
 
-function toLeadDetailViewModel(lead: Lead): LeadDetailViewModel {
+function toLeadDetailViewModel(
+    lead: Lead,
+    scoringService: ScoringService
+): LeadDetailViewModel {
+    const priority = scoringService.calculatePriority(lead);
+
     return {
         leadID: lead.leadID,
         firstName: lead.firstName,
@@ -58,7 +64,9 @@ function toLeadDetailViewModel(lead: Lead): LeadDetailViewModel {
         tradeInVehicle: lead.tradeInVehicle?.getFullDescription() ?? "",
         stage: lead.stage,
         followUpDate: toDateInputValue(lead.followUpDate),
-        score: lead.score,
+        score: priority.score,
+        priorityLevel: priority.level,
+        priorityReasons: priority.reasons,
         notes: lead.notes,
         createdAt: toDateInputValue(lead.createdAt),
         lastInteractionDate: toDateInputValue(lead.lastInteractionDate),
@@ -98,6 +106,7 @@ export default async function LeadDetailPage({
     const vehicleRepository = new VehicleRepo();
     const taskRepository = new TaskRepo();
     const notificationRepository = new NotificationRepo();
+    const scoringService = new ScoringService();
 
     const lead = await leadRepository.getLeadById(Number(id));
 
@@ -129,6 +138,7 @@ export default async function LeadDetailPage({
 
     lead.vehicleInterest = vehicleInterest;
     lead.tradeInVehicle = tradeInVehicle;
+    lead.updateScore(scoringService.calculateScore(lead));
 
     return (
         <div>
@@ -139,7 +149,7 @@ export default async function LeadDetailPage({
             </div>
 
             <LeadDetailPanel
-                lead={toLeadDetailViewModel(lead)}
+                lead={toLeadDetailViewModel(lead, scoringService)}
                 tasks={leadTasks.map(toTaskViewModel)}
                 notifications={leadNotifications.map(toNotificationViewModel)}
             />

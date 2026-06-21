@@ -1,19 +1,63 @@
 import { Lead } from "@/domain/objects/Lead";
 import { Task } from "@/domain/objects/Task";
 
+export type LeadPriorityLevel = "HOT" | "HIGH" | "MEDIUM" | "LOW" | "CLOSED";
+
+export type LeadPriorityResult = {
+    score: number;
+    level: LeadPriorityLevel;
+    hasStrongBuyingIntent: boolean;
+    reasons: string[];
+};
+
 export class ScoringService {
     static readonly THRESHOLD = 100;
+    static readonly HOT_THRESHOLD = 140;
+    static readonly MEDIUM_THRESHOLD = 60;
 
     private readonly silentMilestones = [3, 8, 15, 30, 90, 180, 365];
 
     calculateScore(lead: Lead): number {
-        let score = 0;
+        if (this.isClosedLead(lead)) {
+            return 0;
+        }
 
-        score += this.getStageWeight(lead.stage);
-        score += this.getTimeWeight(lead);
-        score += this.getEngagementWeight(lead);
+        return this.calculatePriority(lead).score;
+    }
 
-        return score;
+    calculatePriority(lead: Lead): LeadPriorityResult {
+        const reasons: string[] = [];
+
+        if (this.isClosedLead(lead)) {
+            return {
+                score: 0,
+                level: "CLOSED",
+                hasStrongBuyingIntent: false,
+                reasons: ["Lead is closed and excluded from active follow-up."],
+            };
+        }
+
+        const stageWeight = this.getStageWeight(lead.stage);
+        let score = stageWeight;
+
+        reasons.push(`${this.normalizeStage(lead.stage)} stage base score ${stageWeight}.`);
+
+        const engagementResult = this.getEngagementWeight(lead);
+        score += engagementResult.score;
+        reasons.push(...engagementResult.reasons);
+
+        const timeResult = this.getTimeWeight(lead);
+        score += timeResult.score;
+        reasons.push(...timeResult.reasons);
+
+        const hasStrongBuyingIntent = this.hasStrongBuyingIntent(lead);
+
+        return {
+            score,
+            level: this.getPriorityLevel(score, hasStrongBuyingIntent),
+            hasStrongBuyingIntent,
+            reasons: this.getPriorityReasons(reasons, score, hasStrongBuyingIntent),
+        };
     }
 
     getScientificMission(
@@ -64,10 +108,10 @@ export class ScoringService {
             }
         }
 
-        const score = this.calculateScore(lead);
+        const priority = this.calculatePriority(lead);
 
-        if (score >= ScoringService.THRESHOLD) {
-            return `High Priority: Nurture ${lead.stage} (Score: ${Math.floor(score)})`;
+        if (priority.level === "HOT" || priority.level === "HIGH") {
+            return `${priority.level} Priority: Nurture ${lead.stage} (Score: ${Math.floor(priority.score)})`;
         }
 
         return `Standard Follow-up: ${lead.stage}`;
@@ -145,15 +189,15 @@ export class ScoringService {
 
         switch (stage.toUpperCase()) {
             case "NEW":
-                return 40;
+                return 20;
             case "CONTACTED":
-                return 50;
+                return 40;
             case "VISITED":
                 return 60;
             case "TEST_DRIVE":
-                return 70;
+                return 80;
             case "NEGOTIATION":
-                return 100;
+                return 110;
             case "CLOSED":
                 return 0;
             default:
@@ -161,36 +205,47 @@ export class ScoringService {
         }
     }
 
-    private getTimeWeight(lead: Lead): number {
+    private getTimeWeight(lead: Lead): { score: number; reasons: string[] } {
         const pivotDate = lead.lastInteractionDate || lead.createdAt;
 
-        if (!pivotDate) return 0;
+        if (!pivotDate) {
+            return { score: 0, reasons: [] };
+        }
 
         const daysSilent = this.getDaysDiff(
             this.resetTime(pivotDate),
             this.resetTime(new Date())
         );
 
-        if (daysSilent > 7) return 30;
-        if (daysSilent > 3) return 15;
-
-        return 0;
-    }
-
-    private getEngagementWeight(lead: Lead): number {
-        let engagementScore = 0;
-
-        const stage = lead.stage ? lead.stage.toUpperCase() : "";
-
-        if (stage === "VISITED") {
-            engagementScore += 20;
-        } else if (stage === "TEST_DRIVE") {
-            engagementScore += 40;
-        } else if (stage === "NEGOTIATION") {
-            engagementScore += 60;
+        if (daysSilent > 7) {
+            return {
+                score: 30,
+                reasons: ["Lead has been silent for more than 7 days."],
+            };
         }
 
+        if (daysSilent > 3) {
+            return {
+                score: 15,
+                reasons: ["Lead has been silent for more than 3 days."],
+            };
+        }
+
+        return { score: 0, reasons: [] };
+    }
+
+    private getEngagementWeight(lead: Lead): {
+        score: number;
+        reasons: string[];
+    } {
+        let engagementScore = 0;
         const notes = lead.notes ? lead.notes.toLowerCase() : "";
+        const reasons: string[] = [];
+
+        if (this.hasRecentLeadReply(lead)) {
+            engagementScore += 30;
+            reasons.push("Recent reply from the lead.");
+        }
 
         if (
             notes.includes("hot") ||
@@ -198,9 +253,158 @@ export class ScoringService {
             notes.includes("urgent")
         ) {
             engagementScore += 20;
+            reasons.push("Notes contain hot, ready, or urgent buying intent.");
         }
 
-        return engagementScore;
+        if (this.hasMultipleShowroomVisits(lead)) {
+            engagementScore += 20;
+            reasons.push("Multiple showroom visits indicate stronger intent.");
+        }
+
+        if (this.hasCompletedTestDrive(lead)) {
+            engagementScore += 20;
+            reasons.push("Test drive completed.");
+        }
+
+        if (this.hasSecondTestDrive(lead)) {
+            engagementScore += 15;
+            reasons.push("Second test drive requested or completed.");
+        }
+
+        if (this.hasPriceNegotiationSignal(lead)) {
+            engagementScore += 30;
+            reasons.push("Price negotiation signal found.");
+        }
+
+        return { score: engagementScore, reasons };
+    }
+
+    private getPriorityLevel(
+        score: number,
+        hasStrongBuyingIntent: boolean
+    ): LeadPriorityLevel {
+        if (score >= ScoringService.HOT_THRESHOLD && hasStrongBuyingIntent) {
+            return "HOT";
+        }
+
+        if (score >= ScoringService.THRESHOLD) {
+            return "HIGH";
+        }
+
+        if (score >= ScoringService.MEDIUM_THRESHOLD) {
+            return "MEDIUM";
+        }
+
+        return "LOW";
+    }
+
+    private getPriorityReasons(
+        reasons: string[],
+        score: number,
+        hasStrongBuyingIntent: boolean
+    ): string[] {
+        const priorityReasons = [...reasons];
+
+        if (hasStrongBuyingIntent) {
+            priorityReasons.push("Strong buying intent signal detected.");
+        }
+
+        if (score >= ScoringService.HOT_THRESHOLD && !hasStrongBuyingIntent) {
+            priorityReasons.push(
+                "Score is high, but HOT priority requires strong buying intent."
+            );
+        }
+
+        return priorityReasons.slice(0, 5);
+    }
+
+    private hasStrongBuyingIntent(lead: Lead): boolean {
+        const stage = this.normalizeStage(lead.stage);
+
+        return (
+            stage === "NEGOTIATION" ||
+            this.hasRecentLeadReply(lead) ||
+            this.hasUrgencyKeywords(lead) ||
+            this.hasMultipleShowroomVisits(lead) ||
+            this.hasCompletedTestDrive(lead) ||
+            this.hasSecondTestDrive(lead) ||
+            this.hasPriceNegotiationSignal(lead)
+        );
+    }
+
+    private hasRecentLeadReply(lead: Lead): boolean {
+        if (lead.lastInteractionBy !== "LEAD" || !lead.lastInteractionDate) {
+            return false;
+        }
+
+        const daysSinceReply = this.getDaysDiff(
+            this.resetTime(lead.lastInteractionDate),
+            this.resetTime(new Date())
+        );
+
+        return daysSinceReply >= 0 && daysSinceReply <= 3;
+    }
+
+    private hasUrgencyKeywords(lead: Lead): boolean {
+        const notes = lead.notes ? lead.notes.toLowerCase() : "";
+
+        return (
+            notes.includes("hot") ||
+            notes.includes("ready") ||
+            notes.includes("urgent")
+        );
+    }
+
+    private hasMultipleShowroomVisits(lead: Lead): boolean {
+        const notes = lead.notes ? lead.notes.toLowerCase() : "";
+
+        return (
+            notes.includes("multiple visit") ||
+            notes.includes("second visit") ||
+            notes.includes("visited twice") ||
+            notes.includes("two visits") ||
+            notes.includes("2 visits") ||
+            notes.includes("came back")
+        );
+    }
+
+    private hasCompletedTestDrive(lead: Lead): boolean {
+        const notes = lead.notes ? lead.notes.toLowerCase() : "";
+
+        return (
+            notes.includes("test drive completed") ||
+            notes.includes("completed test drive")
+        );
+    }
+
+    private hasSecondTestDrive(lead: Lead): boolean {
+        const notes = lead.notes ? lead.notes.toLowerCase() : "";
+
+        return (
+            notes.includes("second test drive") ||
+            notes.includes("2nd test drive") ||
+            notes.includes("another test drive")
+        );
+    }
+
+    private hasPriceNegotiationSignal(lead: Lead): boolean {
+        const notes = lead.notes ? lead.notes.toLowerCase() : "";
+
+        return (
+            notes.includes("price") ||
+            notes.includes("discount") ||
+            notes.includes("deal") ||
+            notes.includes("monthly payment") ||
+            notes.includes("payment")
+        );
+    }
+
+    private isClosedLead(lead: Lead): boolean {
+        return this.normalizeStage(lead.stage) === "CLOSED";
+    }
+
+    private normalizeStage(stage: string | null | undefined): string {
+        return stage ? stage.toUpperCase() : "DEFAULT";
     }
 
     private getMissionNameByDay(day: number): string {

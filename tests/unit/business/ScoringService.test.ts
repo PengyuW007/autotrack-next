@@ -1,6 +1,6 @@
+import { ScoringService } from "@/domain/business/ScoringService";
 import { Lead } from "@/domain/objects/Lead";
 import { Task } from "@/domain/objects/Task";
-import { ScoringService } from "@/domain/business/ScoringService";
 
 describe("ScoringService", () => {
     const scoringService = new ScoringService();
@@ -14,83 +14,150 @@ describe("ScoringService", () => {
         jest.useRealTimers();
     });
 
-    test("calculates score for each lead stage", () => {
+    test("calculates base score for each lead stage", () => {
         expect(scoringService.calculateScore(new Lead({
             firstName: "New",
             stage: "NEW",
             createdAt: new Date("2026-06-20"),
-        }))).toBe(40);
+        }))).toBe(20);
 
         expect(scoringService.calculateScore(new Lead({
             firstName: "Contacted",
             stage: "CONTACTED",
             createdAt: new Date("2026-06-20"),
-        }))).toBe(50);
+        }))).toBe(40);
 
         expect(scoringService.calculateScore(new Lead({
             firstName: "Visited",
             stage: "VISITED",
             createdAt: new Date("2026-06-20"),
-        }))).toBe(80);
+        }))).toBe(60);
 
         expect(scoringService.calculateScore(new Lead({
             firstName: "TestDrive",
             stage: "TEST_DRIVE",
             createdAt: new Date("2026-06-20"),
-        }))).toBe(110);
+        }))).toBe(80);
 
         expect(scoringService.calculateScore(new Lead({
             firstName: "Negotiation",
             stage: "NEGOTIATION",
             createdAt: new Date("2026-06-20"),
-        }))).toBe(160);
+        }))).toBe(110);
 
         expect(scoringService.calculateScore(new Lead({
             firstName: "Closed",
             stage: "CLOSED",
             createdAt: new Date("2026-06-20"),
         }))).toBe(0);
-    });
 
-    test("adds notes engagement score for hot ready urgent lead", () => {
-        const lead = new Lead({
-            firstName: "Mike",
-            stage: "CONTACTED",
-            notes: "Customer is hot and ready to buy urgently",
-            createdAt: new Date("2026-06-20"),
-        });
-
-        expect(scoringService.calculateScore(lead)).toBe(70);
-    });
-
-    test("adds time weight when lead is silent for more than 3 days", () => {
-        const lead = new Lead({
-            firstName: "Emily",
-            stage: "CONTACTED",
-            createdAt: new Date("2026-06-16"),
-        });
-
-        expect(scoringService.calculateScore(lead)).toBe(65);
-    });
-
-    test("adds time weight when lead is silent for more than 7 days", () => {
-        const lead = new Lead({
-            firstName: "David",
-            stage: "CONTACTED",
-            createdAt: new Date("2026-06-10"),
-        });
-
-        expect(scoringService.calculateScore(lead)).toBe(80);
-    });
-
-    test("returns default score for unknown stage", () => {
-        const lead = new Lead({
+        expect(scoringService.calculateScore(new Lead({
             firstName: "Unknown",
             stage: "UNKNOWN",
             createdAt: new Date("2026-06-20"),
+        }))).toBe(10);
+    });
+
+    test("recalculates score when stage changes", () => {
+        const lead = new Lead({
+            firstName: "Stage",
+            stage: "NEW",
+            createdAt: new Date("2026-06-20"),
         });
 
-        expect(scoringService.calculateScore(lead)).toBe(10);
+        expect(scoringService.calculateScore(lead)).toBe(20);
+
+        lead.stage = "NEGOTIATION";
+
+        expect(scoringService.calculateScore(lead)).toBe(110);
+    });
+
+    test("classifies closed lead as closed with score zero", () => {
+        const priority = scoringService.calculatePriority(new Lead({
+            firstName: "Closed",
+            stage: "CLOSED",
+            notes: "urgent ready price",
+            createdAt: new Date("2026-06-01"),
+            lastInteractionDate: new Date("2026-06-20"),
+            lastInteractionBy: "LEAD",
+        }));
+
+        expect(priority.score).toBe(0);
+        expect(priority.level).toBe("CLOSED");
+    });
+
+    test("classifies visited lead with one casual visit as medium", () => {
+        const priority = scoringService.calculatePriority(new Lead({
+            firstName: "Visited",
+            stage: "VISITED",
+            notes: "Stopped by casually to look around",
+            createdAt: new Date("2026-06-20"),
+        }));
+
+        expect(priority.score).toBe(60);
+        expect(priority.level).toBe("MEDIUM");
+    });
+
+    test("adds buying intent for visited lead with multiple visits", () => {
+        const priority = scoringService.calculatePriority(new Lead({
+            firstName: "Repeat",
+            stage: "VISITED",
+            notes: "Customer made multiple visits and came back with spouse",
+            createdAt: new Date("2026-06-20"),
+        }));
+
+        expect(priority.score).toBe(80);
+        expect(priority.level).toBe("MEDIUM");
+        expect(priority.hasStrongBuyingIntent).toBe(true);
+    });
+
+    test("classifies test drive lead with strong buying intent as high", () => {
+        const priority = scoringService.calculatePriority(new Lead({
+            firstName: "Drive",
+            stage: "TEST_DRIVE",
+            createdAt: new Date("2026-06-18"),
+            lastInteractionDate: new Date("2026-06-20"),
+            lastInteractionBy: "LEAD",
+        }));
+
+        expect(priority.score).toBe(110);
+        expect(priority.level).toBe("HIGH");
+    });
+
+    test("classifies negotiation lead as high by default", () => {
+        const priority = scoringService.calculatePriority(new Lead({
+            firstName: "Negotiation",
+            stage: "NEGOTIATION",
+            createdAt: new Date("2026-06-20"),
+        }));
+
+        expect(priority.score).toBe(110);
+        expect(priority.level).toBe("HIGH");
+    });
+
+    test("classifies negotiation lead with urgent recent reply as hot", () => {
+        const priority = scoringService.calculatePriority(new Lead({
+            firstName: "Hot",
+            stage: "NEGOTIATION",
+            notes: "urgent, ready to buy today",
+            createdAt: new Date("2026-06-18"),
+            lastInteractionDate: new Date("2026-06-20"),
+            lastInteractionBy: "LEAD",
+        }));
+
+        expect(priority.score).toBe(160);
+        expect(priority.level).toBe("HOT");
+    });
+
+    test("does not classify overdue weak lead as hot", () => {
+        const priority = scoringService.calculatePriority(new Lead({
+            firstName: "Weak",
+            stage: "NEW",
+            createdAt: new Date("2026-06-01"),
+        }));
+
+        expect(priority.score).toBe(50);
+        expect(priority.level).toBe("LOW");
     });
 
     test("returns scientific mission by milestone dates", () => {
@@ -106,18 +173,6 @@ describe("ScoringService", () => {
 
         expect(scoringService.getScientificMission(lead, new Date("2026-06-04"))).toBe(
             "New Ideas: Follow up thoughts"
-        );
-
-        expect(scoringService.getScientificMission(lead, new Date("2026-06-09"))).toBe(
-            "Market Update: Inventory/Trade-in"
-        );
-
-        expect(scoringService.getScientificMission(lead, new Date("2026-06-16"))).toBe(
-            "Resource: Hidden feature video"
-        );
-
-        expect(scoringService.getScientificMission(lead, new Date("2026-07-01"))).toBe(
-            "Checking In: Specific specs"
         );
     });
 
@@ -157,28 +212,15 @@ describe("ScoringService", () => {
         )).toBe("User-created appointment");
     });
 
-    test("returns high priority mission when score is above threshold", () => {
+    test("returns high priority mission for high priority lead", () => {
         const lead = new Lead({
             firstName: "High",
             stage: "NEGOTIATION",
-            notes: "ready",
             createdAt: new Date("2026-06-20"),
         });
 
         expect(scoringService.getScientificMission(lead, new Date("2026-06-20"))).toBe(
-            "High Priority: Nurture NEGOTIATION (Score: 180)"
-        );
-    });
-
-    test("returns standard follow-up when no milestone or urgent rule applies", () => {
-        const lead = new Lead({
-            firstName: "Normal",
-            stage: "NEW",
-            createdAt: new Date("2026-06-20"),
-        });
-
-        expect(scoringService.getScientificMission(lead, new Date("2026-06-20"))).toBe(
-            "Standard Follow-up: NEW"
+            "HIGH Priority: Nurture NEGOTIATION (Score: 110)"
         );
     });
 

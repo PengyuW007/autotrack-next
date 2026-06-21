@@ -19,7 +19,6 @@ export type AgendaActivity = {
 export class AgendaService {
     private scoringService: ScoringService;
     private priorityManager: PriorityManager;
-    private highPriorityThreshold: number;
 
     constructor(
         scoringService: ScoringService,
@@ -27,7 +26,6 @@ export class AgendaService {
     ) {
         this.scoringService = scoringService;
         this.priorityManager = priorityManager;
-        this.highPriorityThreshold = ScoringService.THRESHOLD;
     }
 
     getTodayAgenda(
@@ -45,8 +43,12 @@ export class AgendaService {
         const threeDaysInMillis = 3 * 24 * 60 * 60 * 1000;
 
         for (const lead of allLeads) {
-            const currentScore = this.scoringService.calculateScore(lead);
-            lead.updateScore(currentScore);
+            const priority = this.scoringService.calculatePriority(lead);
+            lead.updateScore(priority.score);
+
+            if (priority.level === "CLOSED") {
+                continue;
+            }
 
             let hasTaskOnDate = false;
 
@@ -70,7 +72,8 @@ export class AgendaService {
                 }
             }
 
-            const isHighPriority = currentScore >= this.highPriorityThreshold;
+            const isHighPriority =
+                priority.level === "HOT" || priority.level === "HIGH";
 
             let lastInteraction = 0;
 
@@ -153,6 +156,8 @@ export class AgendaService {
             .filter(
                 (lead) =>
                     lead.leadID > 0 &&
+                    this.scoringService.calculatePriority(lead).level !==
+                        "CLOSED" &&
                     lead.followUpDate &&
                     this.formatDate(lead.followUpDate) === targetDateStr &&
                     !this.hasTaskForLeadOnDate(

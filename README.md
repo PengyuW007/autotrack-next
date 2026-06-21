@@ -392,8 +392,8 @@ Completed
 #### AutoTrack Intelligence
 
 * [X] Priority Queue Ranking
-* [ ] Scientific Follow-Up Engine
-* [ ] Lead Score Calculation
+* [X] Scientific Follow-Up Engine
+* [X] Lead Score Calculation
 * [X] Missed Call Detection
 * [X] Notification Tagging
 
