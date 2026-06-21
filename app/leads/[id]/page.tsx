@@ -88,6 +88,16 @@ function toTaskViewModel(task: Task): LeadDetailTaskViewModel {
     };
 }
 
+function sortTaskViewModelsByNewest(
+    tasks: LeadDetailTaskViewModel[]
+): LeadDetailTaskViewModel[] {
+    return [...tasks].sort(
+        (taskA, taskB) =>
+            new Date(`${taskB.date}T${taskB.time || "00:00"}:00`).getTime() -
+            new Date(`${taskA.date}T${taskA.time || "00:00"}:00`).getTime()
+    );
+}
+
 function toNotificationViewModel(
     notification: Notification
 ): LeadDetailNotificationViewModel {
@@ -170,9 +180,11 @@ export default async function LeadDetailPage({
 
             <LeadDetailPanel
                 lead={toLeadDetailViewModel(lead, scoringService)}
-                tasks={agendaService
-                    .getUniqueTasks([...leadTasks, ...createdSystemTasks])
-                    .map(toTaskViewModel)}
+                tasks={sortTaskViewModelsByNewest(
+                    agendaService
+                        .getUniqueTasks([...leadTasks, ...createdSystemTasks])
+                        .map(toTaskViewModel)
+                )}
                 notifications={leadNotifications.map(toNotificationViewModel)}
             />
         </div>

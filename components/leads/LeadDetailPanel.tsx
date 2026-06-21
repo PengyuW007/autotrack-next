@@ -134,6 +134,16 @@ function formatTaskDateTime(task: LeadDetailTaskViewModel) {
     }).format(toTaskDateTime(task.date, task.time));
 }
 
+function sortTasksByNewest(
+    tasks: LeadDetailTaskViewModel[]
+): LeadDetailTaskViewModel[] {
+    return [...tasks].sort(
+        (taskA, taskB) =>
+            toTaskDateTime(taskB.date, taskB.time).getTime() -
+            toTaskDateTime(taskA.date, taskA.time).getTime()
+    );
+}
+
 function createVehicleReference(vehicleId: number | null) {
     if (!vehicleId) {
         return null;
@@ -223,7 +233,9 @@ export default function LeadDetailPanel({
     const router = useRouter();
     const [currentLead, setCurrentLead] = useState(lead);
     const [draftLead, setDraftLead] = useState(lead);
-    const [leadTasks, setLeadTasks] = useState(tasks);
+    const [leadTasks, setLeadTasks] = useState(() =>
+        sortTasksByNewest(tasks)
+    );
     const [leadNotifications, setLeadNotifications] = useState(notifications);
     const [isEditing, setIsEditing] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -365,8 +377,10 @@ export default function LeadDetailPanel({
             }
 
             setLeadTasks((currentTasks) =>
-                currentTasks.map((task) =>
-                    task.taskID === taskID ? nextTask : task
+                sortTasksByNewest(
+                    currentTasks.map((task) =>
+                        task.taskID === taskID ? nextTask : task
+                    )
                 )
             );
             router.refresh();
@@ -420,13 +434,15 @@ export default function LeadDetailPanel({
                 return;
             }
 
-            setLeadTasks((currentTasks) => [
-                ...currentTasks,
-                {
-                    ...taskViewModel,
-                    taskID: task.getEventID(),
-                },
-            ]);
+            setLeadTasks((currentTasks) =>
+                sortTasksByNewest([
+                    ...currentTasks,
+                    {
+                        ...taskViewModel,
+                        taskID: task.getEventID(),
+                    },
+                ])
+            );
             setNewTaskTitle("");
             setNewTaskDate(new Date().toISOString().split("T")[0]);
             setNewTaskTime("09:00");
@@ -556,8 +572,10 @@ export default function LeadDetailPanel({
             }
 
             setLeadTasks((currentTasks) =>
-                currentTasks.map((task) =>
-                    task.taskID === taskID ? nextTask : task
+                sortTasksByNewest(
+                    currentTasks.map((task) =>
+                        task.taskID === taskID ? nextTask : task
+                    )
                 )
             );
             cancelEditingTask();
