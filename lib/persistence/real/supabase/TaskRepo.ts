@@ -56,6 +56,24 @@ function mapTaskToRow(task: Task): TaskInsertRow {
     return row;
 }
 
+function formatTaskDateKey(date: Date): string {
+    const normalizedDate = new Date(date);
+    const year = normalizedDate.getFullYear();
+    const month = String(normalizedDate.getMonth() + 1).padStart(2, "0");
+    const day = String(normalizedDate.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+}
+
+function isSameLogicalTask(taskA: Task, taskB: Task): boolean {
+    return (
+        taskA.getLead()?.leadID === taskB.getLead()?.leadID &&
+        taskA.getTitle() === taskB.getTitle() &&
+        formatTaskDateKey(taskA.getDate()) ===
+            formatTaskDateKey(taskB.getDate())
+    );
+}
+
 export class TaskRepo {
     async getAllTasks(): Promise<Task[]> {
         const { data, error } = await supabase
@@ -99,8 +117,20 @@ export class TaskRepo {
     }
 
     async insertTask(task: Task): Promise<string | null> {
-        if (!task.getLead()?.leadID) {
+        const leadId = task.getLead()?.leadID;
+
+        if (!leadId) {
             return "Task must be associated with a lead.";
+        }
+
+        const existingTasks = await this.getTasksByLeadId(leadId);
+        const existingTask = existingTasks.find((currentTask) =>
+            isSameLogicalTask(currentTask, task)
+        );
+
+        if (existingTask) {
+            task.setEventID(existingTask.getEventID());
+            return null;
         }
 
         const { data, error } = await supabase

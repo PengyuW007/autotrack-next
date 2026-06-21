@@ -201,6 +201,98 @@ describe("AgendaService", () => {
         expect(duplicateCheck.length).toBe(0);
     });
 
+    test("generates gratitude task on creation day regardless of current stage", () => {
+        const agendaService = createService();
+        const targetDate = new Date("2026-06-20");
+        const stages = [
+            "NEW",
+            "CONTACTED",
+            "VISITED",
+            "TEST_DRIVE",
+            "NEGOTIATION",
+        ];
+
+        for (const stage of stages) {
+            const lead = new Lead({
+                leadID: stages.indexOf(stage) + 1,
+                firstName: stage,
+                stage,
+                followUpDate: new Date("2026-07-01"),
+                createdAt: targetDate,
+            });
+
+            const generatedTasks = agendaService.getSystemAssignedTasks(
+                [lead],
+                [],
+                targetDate
+            );
+
+            expect(generatedTasks).toHaveLength(1);
+            expect(generatedTasks[0].getTitle()).toBe(
+                "Gratitude: Thank You & Info Swap"
+            );
+            expect(generatedTasks[0].getLead()?.leadID).toBe(lead.leadID);
+        }
+    });
+
+    test("backfills missing system tasks from lead creation through today", () => {
+        const agendaService = createService();
+        const lead = new Lead({
+            leadID: 1,
+            firstName: "Old",
+            stage: "NEW",
+            followUpDate: new Date("2026-12-31"),
+            createdAt: new Date("2026-03-13"),
+        });
+
+        const generatedTasks =
+            agendaService.getMissingSystemAssignedTasksUpToDate(
+                [lead],
+                [],
+                new Date("2026-06-21")
+            );
+
+        expect(generatedTasks.map((task) => task.getTitle())).toEqual([
+            "Gratitude: Thank You & Info Swap",
+            "Quick check-in: Gratitude follow-up",
+            "New idea: Vehicle option follow-up",
+            "Market update: Inventory follow-up",
+            "Long-term check-in",
+            "Low-pressure reactivation follow-up",
+        ]);
+        expect(generatedTasks.every((task) => !task.isCompleted())).toBe(true);
+    });
+
+    test("collapses duplicate logical tasks by lead date and title", () => {
+        const agendaService = createService();
+        const lead = new Lead({
+            leadID: 1,
+            firstName: "Duplicate",
+            stage: "NEW",
+            createdAt: new Date("2026-03-13"),
+        });
+        const firstTask = new Task(
+            lead,
+            "Gratitude: Thank You & Info Swap",
+            new Date("2026-03-13T04:00:00"),
+            10
+        );
+        const secondTask = new Task(
+            lead,
+            "Gratitude: Thank You & Info Swap",
+            new Date("2026-03-13T04:00:00"),
+            11
+        );
+
+        const uniqueTasks = agendaService.getUniqueTasks([
+            secondTask,
+            firstTask,
+        ]);
+
+        expect(uniqueTasks).toHaveLength(1);
+        expect(uniqueTasks[0].getEventID()).toBe(10);
+    });
+
     test("generates silent milestone tasks without requiring follow-up date", () => {
         const agendaService = createService();
         const milestones = [

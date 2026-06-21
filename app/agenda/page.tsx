@@ -92,8 +92,8 @@ export default function AgendaPage() {
             const leadRepo = new LeadRepo();
             const taskRepo = new TaskRepo();
             const notificationRepo = new NotificationRepo();
-            const [followUpLeads, tasks, notifications] = await Promise.all([
-                leadRepo.getLeadsByFollowUpDate(selectedDate),
+            const [leads, tasks, notifications] = await Promise.all([
+                leadRepo.getAllLeads(),
                 taskRepo.getAllTasks(),
                 notificationRepo.getAllNotifications(),
             ]);
@@ -106,10 +106,10 @@ export default function AgendaPage() {
                 priorityManager
             );
 
-            const systemTasks = agendaService.getSystemAssignedTasks(
-                followUpLeads,
+            const systemTasks = agendaService.getMissingSystemAssignedTasksUpToDate(
+                leads,
                 tasks,
-                selectedDate
+                new Date()
             );
             const createdSystemTasks: Task[] = [];
 
@@ -122,7 +122,10 @@ export default function AgendaPage() {
             }
 
             if (active) {
-                const allTasks = [...tasks, ...createdSystemTasks];
+                const allTasks = agendaService.getUniqueTasks([
+                    ...tasks,
+                    ...createdSystemTasks,
+                ]);
                 const now = new Date();
 
                 setAgendaActivities(

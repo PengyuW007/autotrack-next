@@ -104,7 +104,7 @@ export class AgendaService {
     ): AgendaActivity[] {
         const targetDateStr = this.formatDate(targetDate);
 
-        const taskActivities = allTasks
+        const taskActivities = this.getUniqueTasks(allTasks)
             .filter((task) => this.formatDate(task.getDate()) === targetDateStr)
             .map((task): AgendaActivity => {
                 const lead = task.getLead();
@@ -152,61 +152,163 @@ export class AgendaService {
     ): Task[] {
         const targetDateStr = this.formatDate(targetDate);
 
-        return allLeads
-            .filter(
-                (lead) => {
-                    if (
-                        lead.leadID <= 0 ||
-                        this.scoringService.calculatePriority(lead).level ===
-                            "CLOSED" ||
-                        this.hasTaskForLeadOnDate(
-                            existingTasks,
-                            lead.leadID,
-                            targetDateStr
-                        )
-                    ) {
-                        return false;
-                    }
+        return allLeads.flatMap((lead) => {
+            if (!this.isActiveSystemLead(lead)) {
+                return [];
+            }
 
-                    const hasScheduledFollowUp =
-                        lead.followUpDate &&
-                        this.formatDate(lead.followUpDate) === targetDateStr;
-                    const hasSilentMilestone =
-                        this.scoringService.getSilentMilestoneForDate(
-                            lead,
-                            targetDate
-                        ) !== null;
+            const candidateTasks = this.getSystemTaskCandidatesForDate(
+                lead,
+                targetDate
+            );
 
-                    return Boolean(hasScheduledFollowUp || hasSilentMilestone);
-                }
-            )
-            .map((lead) => {
-                const taskDate =
-                    lead.followUpDate &&
-                    this.formatDate(lead.followUpDate) === targetDateStr
-                        ? new Date(lead.followUpDate)
-                        : new Date(targetDate);
-                const title =
-                    this.scoringService.getScientificMission(
-                        lead,
-                        taskDate,
-                        []
-                    ) ?? `Follow up with ${lead.getLeadName()}`;
-
-                return new Task(lead, title, taskDate);
-            });
+            return candidateTasks.filter(
+                (task) =>
+                    !this.hasDuplicateTask(existingTasks, task) &&
+                    this.formatDate(task.getDate()) === targetDateStr
+            );
+        });
     }
 
-    private hasTaskForLeadOnDate(
-        tasks: Task[],
-        leadId: number,
-        targetDateStr: string
-    ): boolean {
+    getMissingSystemAssignedTasksUpToDate(
+        allLeads: Lead[],
+        existingTasks: Task[],
+        targetDate: Date
+    ): Task[] {
+        const target = this.resetTime(targetDate);
+        const missingTasks: Task[] = [];
+        const knownTasks = this.getUniqueTasks(existingTasks);
+
+        for (const lead of allLeads) {
+            if (!this.isActiveSystemLead(lead)) {
+                continue;
+            }
+
+            const timeline = this.scoringService.generateTimeline(
+                lead,
+                knownTasks
+            );
+
+            for (const task of timeline) {
+                if (
+                    task.getEventID() !== -1 ||
+                    task.getDate().getTime() > target.getTime() ||
+                    this.hasDuplicateTask(knownTasks, task)
+                ) {
+                    continue;
+                }
+
+                missingTasks.push(task);
+                knownTasks.push(task);
+            }
+        }
+
+        return missingTasks;
+    }
+
+    private getSystemTaskCandidatesForDate(
+        lead: Lead,
+        targetDate: Date
+    ): Task[] {
+        const candidates: Task[] = [];
+        const targetDateStr = this.formatDate(targetDate);
+        const hasScheduledFollowUp =
+            lead.followUpDate &&
+            this.formatDate(lead.followUpDate) === targetDateStr;
+        const hasInitialGratitudeTask =
+            this.scoringService.shouldCreateInitialGratitudeTask(
+                lead,
+                targetDate
+            );
+        const hasSilentMilestone =
+            this.scoringService.getSilentMilestoneForDate(
+                lead,
+                targetDate
+            ) !== null;
+
+        if (hasInitialGratitudeTask) {
+            candidates.push(
+                new Task(lead, "Gratitude: Thank You & Info Swap", targetDate)
+            );
+        }
+
+        if (hasScheduledFollowUp || hasSilentMilestone) {
+            const title =
+                this.scoringService.getScientificMission(lead, targetDate, []) ??
+                `Follow up with ${lead.getLeadName()}`;
+            candidates.push(new Task(lead, title, targetDate));
+        }
+
+        return candidates.filter(
+            (candidate, index) =>
+                candidates.findIndex(
+                    (task) =>
+                        task.getLead()?.leadID ===
+                            candidate.getLead()?.leadID &&
+                        this.formatDate(task.getDate()) ===
+                            this.formatDate(candidate.getDate()) &&
+                        task.getTitle() === candidate.getTitle()
+                ) === index
+        );
+    }
+
+    private isActiveSystemLead(lead: Lead): boolean {
+        return (
+            lead.leadID > 0 &&
+            this.scoringService.calculatePriority(lead).level !== "CLOSED"
+        );
+    }
+
+    private hasDuplicateTask(tasks: Task[], candidateTask: Task): boolean {
         return tasks.some(
             (task) =>
-                task.getLead()?.leadID === leadId &&
-                this.formatDate(task.getDate()) === targetDateStr
+                task.getLead()?.leadID ===
+                    candidateTask.getLead()?.leadID &&
+                this.formatDate(task.getDate()) ===
+                    this.formatDate(candidateTask.getDate()) &&
+                task.getTitle() === candidateTask.getTitle()
         );
+    }
+
+    getUniqueTasks(tasks: Task[]): Task[] {
+        const uniqueTaskMap = new Map<string, Task>();
+
+        for (const task of tasks) {
+            const key = this.getTaskIdentityKey(task);
+            const existingTask = uniqueTaskMap.get(key);
+
+            if (!existingTask) {
+                uniqueTaskMap.set(key, task);
+                continue;
+            }
+
+            if (
+                existingTask.getEventID() === -1 ||
+                (task.getEventID() !== -1 &&
+                    task.getEventID() < existingTask.getEventID())
+            ) {
+                uniqueTaskMap.set(key, task);
+            }
+        }
+
+        return [...uniqueTaskMap.values()].sort(
+            (taskA, taskB) =>
+                taskA.getDate().getTime() - taskB.getDate().getTime()
+        );
+    }
+
+    private getTaskIdentityKey(task: Task): string {
+        return [
+            task.getLead()?.leadID ?? "no-lead",
+            this.formatDate(task.getDate()),
+            task.getTitle(),
+        ].join("|");
+    }
+
+    private resetTime(date: Date): Date {
+        const result = new Date(date);
+        result.setHours(0, 0, 0, 0);
+        return result;
     }
 
     private formatDate(date: Date): string {

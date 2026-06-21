@@ -93,6 +93,22 @@ export class ScoringService {
             : null;
     }
 
+    shouldCreateInitialGratitudeTask(
+        lead: Lead | null,
+        targetDate: Date
+    ): boolean {
+        if (!lead || !lead.createdAt || this.isClosedLead(lead)) {
+            return false;
+        }
+
+        return (
+            this.getDaysDiff(
+                this.resetTime(lead.createdAt),
+                this.resetTime(targetDate)
+            ) === 0
+        );
+    }
+
     getScientificMission(
         lead: Lead | null,
         targetDate: Date,
@@ -116,7 +132,7 @@ export class ScoringService {
         const createdDate = this.resetTime(lead.createdAt);
         const target = this.resetTime(targetDate);
 
-        if (this.getDaysDiff(createdDate, target) === 1) {
+        if (this.getDaysDiff(createdDate, target) === 0) {
             return "Gratitude: Thank You & Info Swap";
         }
 
@@ -170,11 +186,10 @@ export class ScoringService {
         const gratitudeTitle = "Gratitude: Thank You & Info Swap";
 
         if (!this.containsTask(timeline, gratitudeTitle)) {
-            const day1 = this.addDays(lead.createdAt, 1);
+            const creationDay = this.resetTime(lead.createdAt);
 
-            if (day1 <= today) {
-                const task = new Task(lead, gratitudeTitle, day1);
-                task.setCompleted(true);
+            if (creationDay <= today) {
+                const task = new Task(lead, gratitudeTitle, creationDay);
                 timeline.push(task);
             }
         }
@@ -210,7 +225,6 @@ export class ScoringService {
 
                 if (milestoneDate <= today) {
                     const task = new Task(lead, title, milestoneDate);
-                    task.setCompleted(milestoneDate < today);
                     timeline.push(task);
                 }
             }

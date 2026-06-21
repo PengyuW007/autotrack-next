@@ -5,6 +5,8 @@ import LeadDetailPanel, {
     LeadDetailTaskViewModel,
     LeadDetailViewModel,
 } from "@/components/leads/LeadDetailPanel";
+import { AgendaService } from "@/domain/business/AgendaService";
+import { PriorityManager } from "@/domain/business/PriorityManager";
 import { ScoringService } from "@/domain/business/ScoringService";
 import { Lead } from "@/domain/objects/Lead";
 import { Notification } from "@/domain/objects/Notification";
@@ -107,6 +109,8 @@ export default async function LeadDetailPage({
     const taskRepository = new TaskRepo();
     const notificationRepository = new NotificationRepo();
     const scoringService = new ScoringService();
+    const priorityManager = new PriorityManager(scoringService);
+    const agendaService = new AgendaService(scoringService, priorityManager);
 
     const lead = await leadRepository.getLeadById(Number(id));
 
@@ -136,6 +140,22 @@ export default async function LeadDetailPage({
             notificationRepository.getNotificationsByLeadId(lead.leadID),
         ]);
 
+    const missingSystemTasks =
+        agendaService.getMissingSystemAssignedTasksUpToDate(
+            [lead],
+            leadTasks,
+            new Date()
+        );
+    const createdSystemTasks: Task[] = [];
+
+    for (const task of missingSystemTasks) {
+        const error = await taskRepository.insertTask(task);
+
+        if (!error) {
+            createdSystemTasks.push(task);
+        }
+    }
+
     lead.vehicleInterest = vehicleInterest;
     lead.tradeInVehicle = tradeInVehicle;
     lead.updateScore(scoringService.calculateScore(lead));
@@ -150,7 +170,9 @@ export default async function LeadDetailPage({
 
             <LeadDetailPanel
                 lead={toLeadDetailViewModel(lead, scoringService)}
-                tasks={leadTasks.map(toTaskViewModel)}
+                tasks={agendaService
+                    .getUniqueTasks([...leadTasks, ...createdSystemTasks])
+                    .map(toTaskViewModel)}
                 notifications={leadNotifications.map(toNotificationViewModel)}
             />
         </div>

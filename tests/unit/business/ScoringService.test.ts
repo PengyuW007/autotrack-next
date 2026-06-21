@@ -274,7 +274,7 @@ describe("ScoringService", () => {
         const lead = new Lead({
             firstName: "High",
             stage: "NEGOTIATION",
-            createdAt: new Date("2026-06-20"),
+            createdAt: new Date("2026-06-19"),
         });
 
         expect(scoringService.getScientificMission(lead, new Date("2026-06-20"))).toBe(

@@ -122,15 +122,14 @@ export default async function DashboardPage() {
         agendaService
     );
 
-    const [leads, tasks, notifications, followUpLeads] = await Promise.all([
+    const [leads, tasks, notifications] = await Promise.all([
         leadRepo.getAllLeads(),
         taskRepo.getAllTasks(),
         notificationRepo.getAllNotifications(),
-        leadRepo.getLeadsByFollowUpDate(targetDate),
     ]);
 
-    const systemTasks = dashboardService.getSystemAssignedTasks(
-        followUpLeads,
+    const systemTasks = agendaService.getMissingSystemAssignedTasksUpToDate(
+        leads,
         tasks,
         targetDate
     );
@@ -144,9 +143,14 @@ export default async function DashboardPage() {
         }
     }
 
+    const allTasks = agendaService.getUniqueTasks([
+        ...tasks,
+        ...createdSystemTasks,
+    ]);
+
     const dashboardData = dashboardService.getDashboardData(
         leads,
-        [...tasks, ...createdSystemTasks],
+        allTasks,
         notifications,
         targetDate
     );
