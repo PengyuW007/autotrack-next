@@ -154,20 +154,38 @@ export class AgendaService {
 
         return allLeads
             .filter(
-                (lead) =>
-                    lead.leadID > 0 &&
-                    this.scoringService.calculatePriority(lead).level !==
-                        "CLOSED" &&
-                    lead.followUpDate &&
-                    this.formatDate(lead.followUpDate) === targetDateStr &&
-                    !this.hasTaskForLeadOnDate(
-                        existingTasks,
-                        lead.leadID,
-                        targetDateStr
-                    )
+                (lead) => {
+                    if (
+                        lead.leadID <= 0 ||
+                        this.scoringService.calculatePriority(lead).level ===
+                            "CLOSED" ||
+                        this.hasTaskForLeadOnDate(
+                            existingTasks,
+                            lead.leadID,
+                            targetDateStr
+                        )
+                    ) {
+                        return false;
+                    }
+
+                    const hasScheduledFollowUp =
+                        lead.followUpDate &&
+                        this.formatDate(lead.followUpDate) === targetDateStr;
+                    const hasSilentMilestone =
+                        this.scoringService.getSilentMilestoneForDate(
+                            lead,
+                            targetDate
+                        ) !== null;
+
+                    return Boolean(hasScheduledFollowUp || hasSilentMilestone);
+                }
             )
             .map((lead) => {
-                const taskDate = new Date(lead.followUpDate);
+                const taskDate =
+                    lead.followUpDate &&
+                    this.formatDate(lead.followUpDate) === targetDateStr
+                        ? new Date(lead.followUpDate)
+                        : new Date(targetDate);
                 const title =
                     this.scoringService.getScientificMission(
                         lead,

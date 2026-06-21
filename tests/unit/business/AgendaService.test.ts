@@ -85,8 +85,8 @@ describe("AgendaService", () => {
             firstName: "Hot",
             stage: "NEGOTIATION",
             notes: "urgent ready",
-            createdAt: new Date("2026-06-10"),
-            lastInteractionDate: new Date("2026-06-10"),
+            createdAt: new Date("2026-06-16"),
+            lastInteractionDate: new Date("2026-06-16"),
         });
 
         const result = agendaService.getTodayAgenda([lead], [], targetDate);
@@ -143,6 +143,14 @@ describe("AgendaService", () => {
             createdAt: new Date("2026-06-20"),
         });
 
+        const reactivationLead = new Lead({
+            leadID: 5,
+            firstName: "Reactivation",
+            stage: "TEST_DRIVE",
+            followUpDate: targetDate,
+            createdAt: new Date("2026-03-01"),
+        });
+
         const highLead = new Lead({
             leadID: 3,
             firstName: "High",
@@ -163,12 +171,12 @@ describe("AgendaService", () => {
         });
 
         const result = agendaService.getTodayAgenda(
-            [closedLead, mediumLead, highLead, hotLead],
+            [closedLead, mediumLead, highLead, hotLead, reactivationLead],
             [],
             targetDate
         );
 
-        expect(result.map((lead) => lead.leadID)).toEqual([4, 3, 2]);
+        expect(result.map((lead) => lead.leadID)).toEqual([4, 3, 2, 5]);
     });
 
     test("generates system assigned task and avoids duplicate task", () => {
@@ -191,6 +199,60 @@ describe("AgendaService", () => {
         const duplicateCheck = agendaService.getSystemAssignedTasks([lead], generatedTasks, targetDate);
 
         expect(duplicateCheck.length).toBe(0);
+    });
+
+    test("generates silent milestone tasks without requiring follow-up date", () => {
+        const agendaService = createService();
+        const milestones = [
+            {
+                targetDate: "2026-06-04",
+                title: "Quick check-in: Gratitude follow-up",
+            },
+            {
+                targetDate: "2026-06-09",
+                title: "New idea: Vehicle option follow-up",
+            },
+            {
+                targetDate: "2026-06-16",
+                title: "Market update: Inventory follow-up",
+            },
+            {
+                targetDate: "2026-07-01",
+                title: "Long-term check-in",
+            },
+            {
+                targetDate: "2026-08-30",
+                title: "Low-pressure reactivation follow-up",
+            },
+            {
+                targetDate: "2026-11-28",
+                title: "Low-pressure reactivation follow-up",
+            },
+            {
+                targetDate: "2027-06-01",
+                title: "Low-pressure reactivation follow-up",
+            },
+        ];
+
+        for (const milestone of milestones) {
+            const lead = new Lead({
+                leadID: 1,
+                firstName: "Silent",
+                stage: "CONTACTED",
+                followUpDate: new Date("2027-12-31"),
+                createdAt: new Date("2026-06-01"),
+            });
+
+            const generatedTasks = agendaService.getSystemAssignedTasks(
+                [lead],
+                [],
+                new Date(milestone.targetDate)
+            );
+
+            expect(generatedTasks).toHaveLength(1);
+            expect(generatedTasks[0].getTitle()).toBe(milestone.title);
+            expect(generatedTasks[0].getLead()?.leadID).toBe(1);
+        }
     });
 
     test("combines tasks and notifications into daily activities", () => {

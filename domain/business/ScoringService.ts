@@ -12,8 +12,8 @@ export type LeadPriorityResult = {
 
 export class ScoringService {
     static readonly THRESHOLD = 100;
-    static readonly HOT_THRESHOLD = 140;
-    static readonly MEDIUM_THRESHOLD = 60;
+    static readonly HOT_THRESHOLD = 130;
+    static readonly MEDIUM_THRESHOLD = 55;
 
     private readonly silentMilestones = [3, 8, 15, 30, 90, 180, 365];
 
@@ -49,15 +49,48 @@ export class ScoringService {
         const timeResult = this.getTimeWeight(lead);
         score += timeResult.score;
         reasons.push(...timeResult.reasons);
+        score = Math.max(0, score);
 
         const hasStrongBuyingIntent = this.hasStrongBuyingIntent(lead);
 
         return {
             score,
-            level: this.getPriorityLevel(score, hasStrongBuyingIntent),
+            level: this.classifyPriority(lead, score, hasStrongBuyingIntent),
             hasStrongBuyingIntent,
-            reasons: this.getPriorityReasons(reasons, score, hasStrongBuyingIntent),
+            reasons: this.buildPriorityReasons(
+                reasons,
+                score,
+                hasStrongBuyingIntent
+            ),
         };
+    }
+
+    getPriorityLevel(lead: Lead): LeadPriorityLevel {
+        return this.calculatePriority(lead).level;
+    }
+
+    getPriorityReasons(lead: Lead): string[] {
+        return this.calculatePriority(lead).reasons;
+    }
+
+    getSilentMilestoneForDate(lead: Lead | null, targetDate: Date): number | null {
+        if (!lead || !lead.createdAt || this.isClosedLead(lead)) {
+            return null;
+        }
+
+        const pivotDate =
+            lead.lastInteractionDate !== null &&
+            lead.lastInteractionBy === "LEAD"
+                ? lead.lastInteractionDate
+                : lead.createdAt;
+        const daysFromPivot = this.getDaysDiff(
+            this.resetTime(pivotDate),
+            this.resetTime(targetDate)
+        );
+
+        return this.silentMilestones.includes(daysFromPivot)
+            ? daysFromPivot
+            : null;
     }
 
     getScientificMission(
@@ -65,7 +98,7 @@ export class ScoringService {
         targetDate: Date,
         existingTasks: Task[] = []
     ): string | null {
-        if (!lead || !lead.createdAt) {
+        if (!lead || !lead.createdAt || this.isClosedLead(lead)) {
             return null;
         }
 
@@ -98,7 +131,11 @@ export class ScoringService {
             target
         );
 
-        if (lead.lastInteractionBy === "LEAD" && daysFromPivot <= 2) {
+        if (
+            lead.lastInteractionBy === "LEAD" &&
+            daysFromPivot >= 0 &&
+            daysFromPivot <= 2
+        ) {
             return "URGENT: Lead replied. Respond within 48h!";
         }
 
@@ -120,7 +157,7 @@ export class ScoringService {
     generateTimeline(lead: Lead | null, existingTasks: Task[] = []): Task[] {
         const timeline: Task[] = [];
 
-        if (!lead || !lead.createdAt) {
+        if (!lead || !lead.createdAt || this.isClosedLead(lead)) {
             return timeline;
         }
 
@@ -191,11 +228,11 @@ export class ScoringService {
             case "NEW":
                 return 20;
             case "CONTACTED":
-                return 40;
+                return 35;
             case "VISITED":
-                return 60;
+                return 55;
             case "TEST_DRIVE":
-                return 80;
+                return 75;
             case "NEGOTIATION":
                 return 110;
             case "CLOSED":
@@ -217,17 +254,38 @@ export class ScoringService {
             this.resetTime(new Date())
         );
 
-        if (daysSilent > 7) {
+        if (daysSilent >= 90) {
             return {
-                score: 30,
-                reasons: ["Lead has been silent for more than 7 days."],
+                score: -60,
+                reasons: ["Lead is long silent and should be treated as reactivation."],
             };
         }
 
-        if (daysSilent > 3) {
+        if (daysSilent >= 30) {
             return {
-                score: 15,
-                reasons: ["Lead has been silent for more than 3 days."],
+                score: -40,
+                reasons: ["Lead has been silent for 30+ days."],
+            };
+        }
+
+        if (daysSilent >= 15) {
+            return {
+                score: -25,
+                reasons: ["Lead has been silent for 15+ days."],
+            };
+        }
+
+        if (daysSilent >= 8) {
+            return {
+                score: -15,
+                reasons: ["Lead has been silent for 8+ days."],
+            };
+        }
+
+        if (daysSilent >= 3) {
+            return {
+                score: -5,
+                reasons: ["Lead has been silent for 3+ days."],
             };
         }
 
@@ -250,10 +308,11 @@ export class ScoringService {
         if (
             notes.includes("hot") ||
             notes.includes("ready") ||
-            notes.includes("urgent")
+            notes.includes("urgent") ||
+            notes.includes("interested")
         ) {
             engagementScore += 20;
-            reasons.push("Notes contain hot, ready, or urgent buying intent.");
+            reasons.push("Notes contain hot, ready, urgent, or interested buying intent.");
         }
 
         if (this.hasMultipleShowroomVisits(lead)) {
@@ -279,15 +338,26 @@ export class ScoringService {
         return { score: engagementScore, reasons };
     }
 
-    private getPriorityLevel(
+    private classifyPriority(
+        lead: Lead,
         score: number,
         hasStrongBuyingIntent: boolean
     ): LeadPriorityLevel {
-        if (score >= ScoringService.HOT_THRESHOLD && hasStrongBuyingIntent) {
+        const stage = this.normalizeStage(lead.stage);
+
+        if (
+            hasStrongBuyingIntent &&
+            score >= ScoringService.HOT_THRESHOLD &&
+            (stage === "NEGOTIATION" || stage === "TEST_DRIVE")
+        ) {
             return "HOT";
         }
 
-        if (score >= ScoringService.THRESHOLD) {
+        if (
+            (stage === "NEGOTIATION" && score >= ScoringService.THRESHOLD) ||
+            (stage === "TEST_DRIVE" && hasStrongBuyingIntent) ||
+            (score >= ScoringService.THRESHOLD && hasStrongBuyingIntent)
+        ) {
             return "HIGH";
         }
 
@@ -298,7 +368,7 @@ export class ScoringService {
         return "LOW";
     }
 
-    private getPriorityReasons(
+    private buildPriorityReasons(
         reasons: string[],
         score: number,
         hasStrongBuyingIntent: boolean
@@ -351,7 +421,8 @@ export class ScoringService {
         return (
             notes.includes("hot") ||
             notes.includes("ready") ||
-            notes.includes("urgent")
+            notes.includes("urgent") ||
+            notes.includes("interested")
         );
     }
 
@@ -394,6 +465,11 @@ export class ScoringService {
             notes.includes("price") ||
             notes.includes("discount") ||
             notes.includes("deal") ||
+            notes.includes("trade-in") ||
+            notes.includes("trade in") ||
+            notes.includes("finance") ||
+            notes.includes("financing") ||
+            notes.includes("lease") ||
             notes.includes("monthly payment") ||
             notes.includes("payment")
         );
@@ -410,19 +486,19 @@ export class ScoringService {
     private getMissionNameByDay(day: number): string {
         switch (day) {
             case 3:
-                return "New Ideas: Follow up thoughts";
+                return "Quick check-in: Gratitude follow-up";
             case 8:
-                return "Market Update: Inventory/Trade-in";
+                return "New idea: Vehicle option follow-up";
             case 15:
-                return "Resource: Hidden feature video";
+                return "Market update: Inventory follow-up";
             case 30:
-                return "Checking In: Specific specs";
+                return "Long-term check-in";
             case 90:
-                return "Seasonal: Service specials";
+                return "Low-pressure reactivation follow-up";
             case 180:
-                return "Relationship: High-level check-in";
+                return "Low-pressure reactivation follow-up";
             case 365:
-                return "Anniversary: Yearly check-in";
+                return "Low-pressure reactivation follow-up";
             default:
                 return "Follow up";
         }

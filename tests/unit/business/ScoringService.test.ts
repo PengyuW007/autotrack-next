@@ -25,19 +25,19 @@ describe("ScoringService", () => {
             firstName: "Contacted",
             stage: "CONTACTED",
             createdAt: new Date("2026-06-20"),
-        }))).toBe(40);
+        }))).toBe(35);
 
         expect(scoringService.calculateScore(new Lead({
             firstName: "Visited",
             stage: "VISITED",
             createdAt: new Date("2026-06-20"),
-        }))).toBe(60);
+        }))).toBe(55);
 
         expect(scoringService.calculateScore(new Lead({
             firstName: "TestDrive",
             stage: "TEST_DRIVE",
             createdAt: new Date("2026-06-20"),
-        }))).toBe(80);
+        }))).toBe(75);
 
         expect(scoringService.calculateScore(new Lead({
             firstName: "Negotiation",
@@ -94,7 +94,7 @@ describe("ScoringService", () => {
             createdAt: new Date("2026-06-20"),
         }));
 
-        expect(priority.score).toBe(60);
+        expect(priority.score).toBe(55);
         expect(priority.level).toBe("MEDIUM");
     });
 
@@ -106,7 +106,7 @@ describe("ScoringService", () => {
             createdAt: new Date("2026-06-20"),
         }));
 
-        expect(priority.score).toBe(80);
+        expect(priority.score).toBe(75);
         expect(priority.level).toBe("MEDIUM");
         expect(priority.hasStrongBuyingIntent).toBe(true);
     });
@@ -120,7 +120,7 @@ describe("ScoringService", () => {
             lastInteractionBy: "LEAD",
         }));
 
-        expect(priority.score).toBe(110);
+        expect(priority.score).toBe(105);
         expect(priority.level).toBe("HIGH");
     });
 
@@ -156,23 +156,81 @@ describe("ScoringService", () => {
             createdAt: new Date("2026-06-01"),
         }));
 
-        expect(priority.score).toBe(50);
+        expect(priority.score).toBe(0);
         expect(priority.level).toBe("LOW");
     });
 
-    test("returns scientific mission by milestone dates", () => {
+    test("new and contacted leads stay low unless they show engagement", () => {
+        const newLead = new Lead({
+            firstName: "New",
+            stage: "NEW",
+            createdAt: new Date("2026-06-20"),
+        });
+        const contactedLead = new Lead({
+            firstName: "Contacted",
+            stage: "CONTACTED",
+            createdAt: new Date("2026-06-20"),
+        });
+        const interestedLead = new Lead({
+            firstName: "Interested",
+            stage: "CONTACTED",
+            notes: "Interested in a hybrid SUV",
+            createdAt: new Date("2026-06-20"),
+        });
+
+        expect(scoringService.getPriorityLevel(newLead)).toBe("LOW");
+        expect(scoringService.getPriorityLevel(contactedLead)).toBe("LOW");
+        expect(scoringService.calculateScore(interestedLead)).toBe(55);
+        expect(scoringService.getPriorityLevel(interestedLead)).toBe("MEDIUM");
+    });
+
+    test("long silence reduces score and priority confidence", () => {
+        const activeLead = new Lead({
+            firstName: "Active",
+            stage: "TEST_DRIVE",
+            createdAt: new Date("2026-06-20"),
+        });
+        const silentLead = new Lead({
+            firstName: "Silent",
+            stage: "TEST_DRIVE",
+            createdAt: new Date("2026-03-01"),
+        });
+
+        expect(scoringService.calculateScore(activeLead)).toBe(75);
+        expect(scoringService.calculateScore(silentLead)).toBe(15);
+        expect(scoringService.getPriorityLevel(silentLead)).toBe("LOW");
+        expect(scoringService.getPriorityReasons(silentLead)).toContain(
+            "Lead is long silent and should be treated as reactivation."
+        );
+    });
+
+    test("returns scientific mission by silent milestone dates", () => {
         const lead = new Lead({
             firstName: "John",
             stage: "NEW",
             createdAt: new Date("2026-06-01"),
         });
 
-        expect(scoringService.getScientificMission(lead, new Date("2026-06-02"))).toBe(
-            "Gratitude: Thank You & Info Swap"
-        );
-
         expect(scoringService.getScientificMission(lead, new Date("2026-06-04"))).toBe(
-            "New Ideas: Follow up thoughts"
+            "Quick check-in: Gratitude follow-up"
+        );
+        expect(scoringService.getScientificMission(lead, new Date("2026-06-09"))).toBe(
+            "New idea: Vehicle option follow-up"
+        );
+        expect(scoringService.getScientificMission(lead, new Date("2026-06-16"))).toBe(
+            "Market update: Inventory follow-up"
+        );
+        expect(scoringService.getScientificMission(lead, new Date("2026-07-01"))).toBe(
+            "Long-term check-in"
+        );
+        expect(scoringService.getScientificMission(lead, new Date("2026-08-30"))).toBe(
+            "Low-pressure reactivation follow-up"
+        );
+        expect(scoringService.getScientificMission(lead, new Date("2026-11-28"))).toBe(
+            "Low-pressure reactivation follow-up"
+        );
+        expect(scoringService.getScientificMission(lead, new Date("2027-06-01"))).toBe(
+            "Low-pressure reactivation follow-up"
         );
     });
 
