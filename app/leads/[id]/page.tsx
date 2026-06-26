@@ -12,6 +12,7 @@ import { Lead } from "@/domain/objects/Lead";
 import { Notification } from "@/domain/objects/Notification";
 import { Task } from "@/domain/objects/Task";
 import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
+import { LeadTradeInVehicleRepo } from "@/lib/persistence/real/supabase/LeadTradeInVehicleRepo";
 import { LeadVehicleInterestRepo } from "@/lib/persistence/real/supabase/LeadVehicleInterestRepo";
 import { NotificationRepo } from "@/lib/persistence/real/supabase/NotificationRepo";
 import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
@@ -69,6 +70,10 @@ function toLeadDetailViewModel(
         vehicleInterestTrim: lead.vehicleInterest?.trim ?? "",
         tradeInVehicleId: lead.tradeInVehicle?.vehicleID ?? null,
         tradeInVehicle: lead.tradeInVehicle?.getFullDescription() ?? "",
+        tradeInVehicleYear: lead.tradeInVehicle?.year?.toString() ?? "",
+        tradeInVehicleMake: lead.tradeInVehicle?.make ?? "",
+        tradeInVehicleModel: lead.tradeInVehicle?.model ?? "",
+        tradeInVehicleTrim: lead.tradeInVehicle?.trim ?? "",
         stage: lead.stage,
         followUpDate: toDateInputValue(lead.followUpDate),
         score: priority.score,
@@ -124,6 +129,9 @@ export default async function LeadDetailPage({
     const leadVehicleInterestRepository = new LeadVehicleInterestRepo(
         vehicleRepository
     );
+    const leadTradeInVehicleRepository = new LeadTradeInVehicleRepo(
+        vehicleRepository
+    );
     const taskRepository = new TaskRepo();
     const notificationRepository = new NotificationRepo();
     const scoringService = new ScoringService();
@@ -151,9 +159,9 @@ export default async function LeadDetailPage({
             leadVehicleInterestRepository.getVehicleInterestByLeadId(
                 lead.leadID
             ),
-            lead.tradeInVehicle?.vehicleID
-                ? vehicleRepository.getVehicleById(lead.tradeInVehicle.vehicleID)
-                : Promise.resolve(null),
+            leadTradeInVehicleRepository.getTradeInVehicleByLeadId(
+                lead.leadID
+            ),
             taskRepository.getTasksByLeadId(lead.leadID),
             notificationRepository.getNotificationsByLeadId(lead.leadID),
         ]);

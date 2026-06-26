@@ -73,6 +73,10 @@ export interface LeadDetailViewModel {
     vehicleInterestTrim: string;
     tradeInVehicleId: number | null;
     tradeInVehicle: string;
+    tradeInVehicleYear: string;
+    tradeInVehicleMake: string;
+    tradeInVehicleModel: string;
+    tradeInVehicleTrim: string;
     stage: string;
     followUpDate: string;
     score: number;
@@ -151,6 +155,17 @@ function getVehicleSelectionFromLead(
         make: lead.vehicleInterestMake,
         model: lead.vehicleInterestModel,
         trim: lead.vehicleInterestTrim,
+    };
+}
+
+function getTradeInSelectionFromLead(
+    lead: LeadDetailViewModel
+): VehicleSelection {
+    return {
+        year: lead.tradeInVehicleYear,
+        make: lead.tradeInVehicleMake,
+        model: lead.tradeInVehicleModel,
+        trim: lead.tradeInVehicleTrim,
     };
 }
 
@@ -267,6 +282,8 @@ export default function LeadDetailPanel({
     const [draftLead, setDraftLead] = useState(lead);
     const [draftVehicleInterest, setDraftVehicleInterest] =
         useState<VehicleSelection>(() => getVehicleSelectionFromLead(lead));
+    const [draftTradeInVehicle, setDraftTradeInVehicle] =
+        useState<VehicleSelection>(() => getTradeInSelectionFromLead(lead));
     const [leadTasks, setLeadTasks] = useState(() =>
         sortTasksByNewest(tasks)
     );
@@ -348,8 +365,21 @@ export default function LeadDetailPanel({
                 return;
             }
 
+            const tradeInError =
+                await vehicleSelectionService.saveLeadTradeInVehicle(
+                    currentLead.leadID,
+                    draftTradeInVehicle
+                );
+
+            if (tradeInError) {
+                setErrorMessage(tradeInError);
+                return;
+            }
+
             const vehicleDescription =
                 getVehicleDescription(draftVehicleInterest);
+            const tradeInDescription =
+                getVehicleDescription(draftTradeInVehicle);
 
             const nextLead = {
                 ...normalizedDraftLead,
@@ -361,6 +391,11 @@ export default function LeadDetailPanel({
                 vehicleInterestMake: draftVehicleInterest.make,
                 vehicleInterestModel: draftVehicleInterest.model,
                 vehicleInterestTrim: draftVehicleInterest.trim,
+                tradeInVehicle: tradeInDescription,
+                tradeInVehicleYear: draftTradeInVehicle.year,
+                tradeInVehicleMake: draftTradeInVehicle.make,
+                tradeInVehicleModel: draftTradeInVehicle.model,
+                tradeInVehicleTrim: draftTradeInVehicle.trim,
             };
 
             setCurrentLead(nextLead);
@@ -379,6 +414,7 @@ export default function LeadDetailPanel({
     function handleCancel() {
         setDraftLead(currentLead);
         setDraftVehicleInterest(getVehicleSelectionFromLead(currentLead));
+        setDraftTradeInVehicle(getTradeInSelectionFromLead(currentLead));
         setIsEditing(false);
         setErrorMessage(null);
     }
@@ -963,6 +999,17 @@ export default function LeadDetailPanel({
                                 />
                             </div>
                         </div>
+                        <div className="md:col-span-2">
+                            <p className="text-sm font-medium text-slate-700">
+                                Trade-in Vehicle
+                            </p>
+                            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                <VehicleInterestSelector
+                                    value={draftTradeInVehicle}
+                                    onChange={setDraftTradeInVehicle}
+                                />
+                            </div>
+                        </div>
                         <label className="text-sm font-medium text-slate-700">
                             Division
                             <input
@@ -1133,8 +1180,12 @@ export default function LeadDetailPanel({
                                 <Field
                                     label="Trade-in"
                                     value={
-                                        currentLead.tradeInVehicle ||
-                                        "No vehicle information available."
+                                        getVehicleDescription(
+                                            getTradeInSelectionFromLead(
+                                                currentLead
+                                            )
+                                        ) ||
+                                        "No trade-in vehicle has been selected."
                                     }
                                     icon={Car}
                                 />

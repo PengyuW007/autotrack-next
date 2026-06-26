@@ -1,4 +1,5 @@
 import { Vehicle } from "@/domain/objects/Vehicle";
+import { LeadTradeInVehicleRepo } from "@/lib/persistence/real/supabase/LeadTradeInVehicleRepo";
 import { LeadVehicleInterestRepo } from "@/lib/persistence/real/supabase/LeadVehicleInterestRepo";
 import { VehicleRepo } from "@/lib/persistence/real/supabase/VehicleRepo";
 
@@ -12,13 +13,16 @@ export type VehicleSelection = {
 export class VehicleSelectionService {
     private vehicleRepo: VehicleRepo;
     private leadVehicleInterestRepo: LeadVehicleInterestRepo;
+    private leadTradeInVehicleRepo: LeadTradeInVehicleRepo;
 
     constructor(
         vehicleRepo = new VehicleRepo(),
-        leadVehicleInterestRepo = new LeadVehicleInterestRepo(vehicleRepo)
+        leadVehicleInterestRepo = new LeadVehicleInterestRepo(vehicleRepo),
+        leadTradeInVehicleRepo = new LeadTradeInVehicleRepo(vehicleRepo)
     ) {
         this.vehicleRepo = vehicleRepo;
         this.leadVehicleInterestRepo = leadVehicleInterestRepo;
+        this.leadTradeInVehicleRepo = leadTradeInVehicleRepo;
     }
 
     searchYears(query: string): Promise<number[]> {
@@ -87,6 +91,32 @@ export class VehicleSelectionService {
         }
 
         return this.leadVehicleInterestRepo.saveVehicleInterest({
+            leadId,
+            year,
+            make,
+            model,
+            trim,
+        });
+    }
+
+    async saveLeadTradeInVehicle(
+        leadId: number,
+        selection: VehicleSelection
+    ): Promise<string | null> {
+        const year = Number(selection.year);
+        const make = selection.make.trim();
+        const model = selection.model.trim();
+        const trim = selection.trim.trim();
+
+        if (!year && !make && !model && !trim) {
+            return this.leadTradeInVehicleRepo.clearTradeInVehicle(leadId);
+        }
+
+        if (!year || !make || !model) {
+            return "Year, make, and model are required to save trade-in vehicle.";
+        }
+
+        return this.leadTradeInVehicleRepo.saveTradeInVehicle({
             leadId,
             year,
             make,
