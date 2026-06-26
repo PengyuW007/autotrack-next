@@ -10,6 +10,7 @@ import {
 type VehicleInterestSelectorProps = {
     value: VehicleSelection;
     onChange: (value: VehicleSelection) => void;
+    placeholders?: Partial<Record<FieldName, string>>;
     disabled?: boolean;
 };
 
@@ -81,6 +82,7 @@ function AutocompleteField({
 export default function VehicleInterestSelector({
     value,
     onChange,
+    placeholders = {},
     disabled = false,
 }: VehicleInterestSelectorProps) {
     const service = useMemo(() => new VehicleSelectionService(), []);
@@ -177,7 +179,7 @@ export default function VehicleInterestSelector({
                     label="Year"
                     value={value.year}
                     options={options.year}
-                    placeholder="2026"
+                    placeholder={placeholders.year ?? "Select year"}
                     disabled={disabled}
                     onFocus={() => undefined}
                     onChange={(year) =>
@@ -201,7 +203,7 @@ export default function VehicleInterestSelector({
                     label="Make"
                     value={value.make}
                     options={options.make}
-                    placeholder="Volkswagen"
+                    placeholder={placeholders.make ?? "Select make"}
                     disabled={disabled || !value.year}
                     onFocus={() => undefined}
                     onChange={(make) =>
@@ -223,7 +225,7 @@ export default function VehicleInterestSelector({
                     label="Model"
                     value={value.model}
                     options={options.model}
-                    placeholder="Tiguan"
+                    placeholder={placeholders.model ?? "Select model"}
                     disabled={disabled || !value.year || !value.make}
                     onFocus={() => undefined}
                     onChange={(model) =>
@@ -243,7 +245,7 @@ export default function VehicleInterestSelector({
                     label="Trim"
                     value={value.trim}
                     options={options.trim}
-                    placeholder="Optional"
+                    placeholder={placeholders.trim ?? "Optional trim"}
                     disabled={
                         disabled || !value.year || !value.make || !value.model
                     }
