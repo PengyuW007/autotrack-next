@@ -12,6 +12,7 @@ import { Lead } from "@/domain/objects/Lead";
 import { Notification } from "@/domain/objects/Notification";
 import { Task } from "@/domain/objects/Task";
 import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
+import { LeadVehicleInterestRepo } from "@/lib/persistence/real/supabase/LeadVehicleInterestRepo";
 import { NotificationRepo } from "@/lib/persistence/real/supabase/NotificationRepo";
 import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
 import { VehicleRepo } from "@/lib/persistence/real/supabase/VehicleRepo";
@@ -62,6 +63,10 @@ function toLeadDetailViewModel(
         budget: lead.budget,
         vehicleInterestId: lead.vehicleInterest?.vehicleID ?? null,
         vehicleInterest: lead.vehicleInterest?.getFullDescription() ?? "",
+        vehicleInterestYear: lead.vehicleInterest?.year?.toString() ?? "",
+        vehicleInterestMake: lead.vehicleInterest?.make ?? "",
+        vehicleInterestModel: lead.vehicleInterest?.model ?? "",
+        vehicleInterestTrim: lead.vehicleInterest?.trim ?? "",
         tradeInVehicleId: lead.tradeInVehicle?.vehicleID ?? null,
         tradeInVehicle: lead.tradeInVehicle?.getFullDescription() ?? "",
         stage: lead.stage,
@@ -116,6 +121,9 @@ export default async function LeadDetailPage({
 
     const leadRepository = new LeadRepo();
     const vehicleRepository = new VehicleRepo();
+    const leadVehicleInterestRepository = new LeadVehicleInterestRepo(
+        vehicleRepository
+    );
     const taskRepository = new TaskRepo();
     const notificationRepository = new NotificationRepo();
     const scoringService = new ScoringService();
@@ -140,9 +148,9 @@ export default async function LeadDetailPage({
 
     const [vehicleInterest, tradeInVehicle, leadTasks, leadNotifications] =
         await Promise.all([
-            lead.vehicleInterest?.vehicleID
-                ? vehicleRepository.getVehicleById(lead.vehicleInterest.vehicleID)
-                : Promise.resolve(null),
+            leadVehicleInterestRepository.getVehicleInterestByLeadId(
+                lead.leadID
+            ),
             lead.tradeInVehicle?.vehicleID
                 ? vehicleRepository.getVehicleById(lead.tradeInVehicle.vehicleID)
                 : Promise.resolve(null),

@@ -58,6 +58,171 @@ function mapVehicleToRow(vehicle: Vehicle): VehicleInsertRow {
 }
 
 export class VehicleRepo {
+    async searchYears(query = "", limit = 20): Promise<number[]> {
+        const request = supabase
+            .from(TABLE_NAME)
+            .select("year")
+            .not("year", "is", null)
+            .order("year", { ascending: false })
+            .limit(500);
+
+        const { data, error } = await request;
+
+        if (error || !data) {
+            return [];
+        }
+
+        const normalizedQuery = query.trim();
+
+        return [
+            ...new Set(
+                data
+                    .map((row) => (row as Pick<VehicleRow, "year">).year)
+                    .filter((year): year is number => year !== null)
+                    .filter(
+                        (year) =>
+                            !normalizedQuery ||
+                            year.toString().startsWith(normalizedQuery)
+                    )
+            ),
+        ].slice(0, limit);
+    }
+
+    async searchMakes(
+        year: number,
+        query = "",
+        limit = 20
+    ): Promise<string[]> {
+        let request = supabase
+            .from(TABLE_NAME)
+            .select("make")
+            .eq("year", year)
+            .not("make", "is", null)
+            .order("make", { ascending: true })
+            .limit(500);
+
+        if (query.trim()) {
+            request = request.ilike("make", `%${query.trim()}%`);
+        }
+
+        const { data, error } = await request;
+
+        if (error || !data) {
+            return [];
+        }
+
+        return [
+            ...new Set(
+                data
+                    .map((row) => (row as Pick<VehicleRow, "make">).make)
+                    .filter((make): make is string => Boolean(make))
+            ),
+        ].slice(0, limit);
+    }
+
+    async searchModels(
+        year: number,
+        make: string,
+        query = "",
+        limit = 20
+    ): Promise<string[]> {
+        let request = supabase
+            .from(TABLE_NAME)
+            .select("model")
+            .eq("year", year)
+            .ilike("make", make)
+            .not("model", "is", null)
+            .order("model", { ascending: true })
+            .limit(500);
+
+        if (query.trim()) {
+            request = request.ilike("model", `%${query.trim()}%`);
+        }
+
+        const { data, error } = await request;
+
+        if (error || !data) {
+            return [];
+        }
+
+        return [
+            ...new Set(
+                data
+                    .map((row) => (row as Pick<VehicleRow, "model">).model)
+                    .filter((model): model is string => Boolean(model))
+            ),
+        ].slice(0, limit);
+    }
+
+    async searchTrims(
+        year: number,
+        make: string,
+        model: string,
+        query = "",
+        limit = 20
+    ): Promise<string[]> {
+        let request = supabase
+            .from(TABLE_NAME)
+            .select("trim")
+            .eq("year", year)
+            .ilike("make", make)
+            .ilike("model", model)
+            .not("trim", "is", null)
+            .order("trim", { ascending: true })
+            .limit(500);
+
+        if (query.trim()) {
+            request = request.ilike("trim", `%${query.trim()}%`);
+        }
+
+        const { data, error } = await request;
+
+        if (error || !data) {
+            return [];
+        }
+
+        return [
+            ...new Set(
+                data
+                    .map((row) => (row as Pick<VehicleRow, "trim">).trim)
+                    .filter((trim): trim is string => Boolean(trim))
+            ),
+        ].slice(0, limit);
+    }
+
+    async findVehicleBySelection({
+        year,
+        make,
+        model,
+        trim,
+    }: {
+        year: number;
+        make: string;
+        model: string;
+        trim?: string;
+    }): Promise<Vehicle | null> {
+        let request = supabase
+            .from(TABLE_NAME)
+            .select("*")
+            .eq("year", year)
+            .ilike("make", make)
+            .ilike("model", model)
+            .order("trim", { ascending: true })
+            .limit(1);
+
+        if (trim?.trim()) {
+            request = request.ilike("trim", trim.trim());
+        }
+
+        const { data, error } = await request;
+
+        if (error || !data || data.length === 0) {
+            return null;
+        }
+
+        return mapRowToVehicle(data[0] as VehicleRow);
+    }
+
     async getAllVehicles(): Promise<Vehicle[]> {
         const { data, error } = await supabase
             .from(TABLE_NAME)

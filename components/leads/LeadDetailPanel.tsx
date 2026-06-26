@@ -23,6 +23,10 @@ import {
 } from "lucide-react";
 
 import { ScoringService } from "@/domain/business/ScoringService";
+import {
+    VehicleSelection,
+    VehicleSelectionService,
+} from "@/domain/business/VehicleSelectionService";
 import { Lead } from "@/domain/objects/Lead";
 import { Notification } from "@/domain/objects/Notification";
 import { Task } from "@/domain/objects/Task";
@@ -30,6 +34,7 @@ import { Vehicle } from "@/domain/objects/Vehicle";
 import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
 import { NotificationRepo } from "@/lib/persistence/real/supabase/NotificationRepo";
 import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
+import VehicleInterestSelector from "@/components/leads/VehicleInterestSelector";
 
 export interface LeadDetailTaskViewModel {
     taskID: number;
@@ -62,6 +67,10 @@ export interface LeadDetailViewModel {
     budget: number;
     vehicleInterestId: number | null;
     vehicleInterest: string;
+    vehicleInterestYear: string;
+    vehicleInterestMake: string;
+    vehicleInterestModel: string;
+    vehicleInterestTrim: string;
     tradeInVehicleId: number | null;
     tradeInVehicle: string;
     stage: string;
@@ -132,6 +141,29 @@ function formatTaskDateTime(task: LeadDetailTaskViewModel) {
         hour: "numeric",
         minute: "2-digit",
     }).format(toTaskDateTime(task.date, task.time));
+}
+
+function getVehicleSelectionFromLead(
+    lead: LeadDetailViewModel
+): VehicleSelection {
+    return {
+        year: lead.vehicleInterestYear,
+        make: lead.vehicleInterestMake,
+        model: lead.vehicleInterestModel,
+        trim: lead.vehicleInterestTrim,
+    };
+}
+
+function getVehicleDescription(selection: VehicleSelection): string {
+    return [
+        selection.year,
+        selection.make,
+        selection.model,
+        selection.trim ? `(${selection.trim})` : "",
+    ]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
 }
 
 function sortTasksByNewest(
@@ -233,6 +265,8 @@ export default function LeadDetailPanel({
     const router = useRouter();
     const [currentLead, setCurrentLead] = useState(lead);
     const [draftLead, setDraftLead] = useState(lead);
+    const [draftVehicleInterest, setDraftVehicleInterest] =
+        useState<VehicleSelection>(() => getVehicleSelectionFromLead(lead));
     const [leadTasks, setLeadTasks] = useState(() =>
         sortTasksByNewest(tasks)
     );
@@ -257,6 +291,10 @@ export default function LeadDetailPanel({
     const [draftTaskDate, setDraftTaskDate] = useState("");
     const [draftTaskTime, setDraftTaskTime] = useState("");
     const scoringService = useMemo(() => new ScoringService(), []);
+    const vehicleSelectionService = useMemo(
+        () => new VehicleSelectionService(),
+        []
+    );
 
     const fullName = useMemo(
         () => `${currentLead.firstName} ${currentLead.lastName}`.trim(),
@@ -299,11 +337,30 @@ export default function LeadDetailPanel({
                 return;
             }
 
+            const vehicleError =
+                await vehicleSelectionService.saveLeadVehicleInterest(
+                    currentLead.leadID,
+                    draftVehicleInterest
+                );
+
+            if (vehicleError) {
+                setErrorMessage(vehicleError);
+                return;
+            }
+
+            const vehicleDescription =
+                getVehicleDescription(draftVehicleInterest);
+
             const nextLead = {
                 ...normalizedDraftLead,
                 score: priority.score,
                 priorityLevel: priority.level,
                 priorityReasons: priority.reasons,
+                vehicleInterest: vehicleDescription,
+                vehicleInterestYear: draftVehicleInterest.year,
+                vehicleInterestMake: draftVehicleInterest.make,
+                vehicleInterestModel: draftVehicleInterest.model,
+                vehicleInterestTrim: draftVehicleInterest.trim,
             };
 
             setCurrentLead(nextLead);
@@ -321,6 +378,7 @@ export default function LeadDetailPanel({
 
     function handleCancel() {
         setDraftLead(currentLead);
+        setDraftVehicleInterest(getVehicleSelectionFromLead(currentLead));
         setIsEditing(false);
         setErrorMessage(null);
     }
@@ -894,6 +952,17 @@ export default function LeadDetailPanel({
                                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-950"
                             />
                         </label>
+                        <div className="md:col-span-2">
+                            <p className="text-sm font-medium text-slate-700">
+                                Vehicle Interest
+                            </p>
+                            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                <VehicleInterestSelector
+                                    value={draftVehicleInterest}
+                                    onChange={setDraftVehicleInterest}
+                                />
+                            </div>
+                        </div>
                         <label className="text-sm font-medium text-slate-700">
                             Division
                             <input
@@ -1044,8 +1113,12 @@ export default function LeadDetailPanel({
                                 <Field
                                     label="Selected Vehicle"
                                     value={
-                                        currentLead.vehicleInterest ||
-                                        "No vehicle information available."
+                                        getVehicleDescription(
+                                            getVehicleSelectionFromLead(
+                                                currentLead
+                                            )
+                                        ) ||
+                                        "No vehicle has been selected."
                                     }
                                     icon={Car}
                                 />
