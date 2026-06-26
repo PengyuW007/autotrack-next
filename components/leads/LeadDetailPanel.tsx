@@ -181,6 +181,15 @@ function getVehicleDescription(selection: VehicleSelection): string {
         .trim();
 }
 
+function getEmptyVehicleSelection(): VehicleSelection {
+    return {
+        year: "",
+        make: "",
+        model: "",
+        trim: "",
+    };
+}
+
 function sortTasksByNewest(
     tasks: LeadDetailTaskViewModel[]
 ): LeadDetailTaskViewModel[] {
@@ -724,7 +733,7 @@ export default function LeadDetailPanel({
 
             <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-start gap-3">
                         <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                             <UserRound size={24} />
                         </div>
@@ -736,6 +745,46 @@ export default function LeadDetailPanel({
                                 Lead #{currentLead.leadID} - created{" "}
                                 {formatDisplayDate(currentLead.createdAt)}
                             </p>
+                            {!isEditing ? (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    <button
+                                        onClick={() =>
+                                            handleLogCommunication("call")
+                                        }
+                                        disabled={loggingCommunication !== null}
+                                        className="inline-flex min-w-24 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <Phone size={15} />
+                                        {loggingCommunication === "call"
+                                            ? "Logging..."
+                                            : "Call"}
+                                    </button>
+                                    <button
+                                        onClick={() =>
+                                            handleLogCommunication("email")
+                                        }
+                                        disabled={loggingCommunication !== null}
+                                        className="inline-flex min-w-24 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <Mail size={15} />
+                                        {loggingCommunication === "email"
+                                            ? "Logging..."
+                                            : "Email"}
+                                    </button>
+                                    <button
+                                        onClick={() =>
+                                            handleLogCommunication("message")
+                                        }
+                                        disabled={loggingCommunication !== null}
+                                        className="inline-flex min-w-24 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <MessageSquare size={15} />
+                                        {loggingCommunication === "message"
+                                            ? "Logging..."
+                                            : "Message"}
+                                    </button>
+                                </div>
+                            ) : null}
                         </div>
                     </div>
 
@@ -761,40 +810,6 @@ export default function LeadDetailPanel({
                             </>
                         ) : (
                             <>
-                                <button
-                                    onClick={() => handleLogCommunication("call")}
-                                    disabled={loggingCommunication !== null}
-                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    <Phone size={16} />
-                                    {loggingCommunication === "call"
-                                        ? "Logging..."
-                                        : "Call"}
-                                </button>
-                                <button
-                                    onClick={() =>
-                                        handleLogCommunication("email")
-                                    }
-                                    disabled={loggingCommunication !== null}
-                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    <Mail size={16} />
-                                    {loggingCommunication === "email"
-                                        ? "Logging..."
-                                        : "Email"}
-                                </button>
-                                <button
-                                    onClick={() =>
-                                        handleLogCommunication("message")
-                                    }
-                                    disabled={loggingCommunication !== null}
-                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    <MessageSquare size={16} />
-                                    {loggingCommunication === "message"
-                                        ? "Logging..."
-                                        : "Message"}
-                                </button>
                                 <button
                                     onClick={() => setIsEditing(true)}
                                     className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
@@ -989,24 +1004,62 @@ export default function LeadDetailPanel({
                             />
                         </label>
                         <div className="md:col-span-2">
-                            <p className="text-sm font-medium text-slate-700">
-                                Vehicle Interest
-                            </p>
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm font-medium text-slate-700">
+                                    Vehicle Interest
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setDraftVehicleInterest(
+                                            getEmptyVehicleSelection()
+                                        )
+                                    }
+                                    className="text-sm font-semibold text-slate-500 hover:text-red-600"
+                                >
+                                    Clear
+                                </button>
+                            </div>
                             <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
                                 <VehicleInterestSelector
                                     value={draftVehicleInterest}
                                     onChange={setDraftVehicleInterest}
+                                    placeholders={{
+                                        year: "Select year",
+                                        make: "Select make",
+                                        model: "Select model",
+                                        trim: "Optional trim",
+                                    }}
                                 />
                             </div>
                         </div>
                         <div className="md:col-span-2">
-                            <p className="text-sm font-medium text-slate-700">
-                                Trade-in Vehicle
-                            </p>
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm font-medium text-slate-700">
+                                    Trade-in Vehicle
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setDraftTradeInVehicle(
+                                            getEmptyVehicleSelection()
+                                        )
+                                    }
+                                    className="text-sm font-semibold text-slate-500 hover:text-red-600"
+                                >
+                                    Clear
+                                </button>
+                            </div>
                             <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
                                 <VehicleInterestSelector
                                     value={draftTradeInVehicle}
                                     onChange={setDraftTradeInVehicle}
+                                    placeholders={{
+                                        year: "Enter year",
+                                        make: "Enter make",
+                                        model: "Enter model",
+                                        trim: "Optional trim",
+                                    }}
                                 />
                             </div>
                         </div>
