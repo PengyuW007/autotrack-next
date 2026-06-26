@@ -10,6 +10,17 @@ type LeadVehicleInterestRow = {
 };
 
 const TABLE_NAME = "lead_vehicle_interests";
+const MISSING_TABLE_MESSAGE =
+    "Vehicle interest table is not set up in Supabase. Run the lead_vehicle_interests migration SQL first.";
+
+function isMissingTableError(message: string): boolean {
+    return (
+        message.includes("lead_vehicle_interests") &&
+        (message.includes("schema cache") ||
+            message.includes("does not exist") ||
+            message.includes("Could not find the table"))
+    );
+}
 
 export class LeadVehicleInterestRepo {
     private vehicleRepo: VehicleRepo;
@@ -91,6 +102,10 @@ export class LeadVehicleInterestRepo {
                 { onConflict: "lead_id" }
             );
 
+        if (error?.message && isMissingTableError(error.message)) {
+            return MISSING_TABLE_MESSAGE;
+        }
+
         return error?.message ?? null;
     }
 
@@ -99,6 +114,10 @@ export class LeadVehicleInterestRepo {
             .from(TABLE_NAME)
             .delete()
             .eq("lead_id", leadId);
+
+        if (error?.message && isMissingTableError(error.message)) {
+            return MISSING_TABLE_MESSAGE;
+        }
 
         return error?.message ?? null;
     }
