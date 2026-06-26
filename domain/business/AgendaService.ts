@@ -282,6 +282,15 @@ export class AgendaService {
                 continue;
             }
 
+            if (task.isCompleted() && !existingTask.isCompleted()) {
+                uniqueTaskMap.set(key, task);
+                continue;
+            }
+
+            if (!task.isCompleted() && existingTask.isCompleted()) {
+                continue;
+            }
+
             if (
                 existingTask.getEventID() === -1 ||
                 (task.getEventID() !== -1 &&

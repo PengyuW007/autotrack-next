@@ -11,14 +11,10 @@ import {
     Phone,
     PlusCircle,
     RefreshCcw,
-    UserRound,
 } from "lucide-react";
 
 import { AgendaService } from "@/domain/business/AgendaService";
-import {
-    DashboardService,
-    DashboardTaskStatus,
-} from "@/domain/business/DashboardService";
+import { DashboardService } from "@/domain/business/DashboardService";
 import { PriorityManager } from "@/domain/business/PriorityManager";
 import { ScoringService } from "@/domain/business/ScoringService";
 import { Task } from "@/domain/objects/Task";
@@ -26,6 +22,11 @@ import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
 import { NotificationRepo } from "@/lib/persistence/real/supabase/NotificationRepo";
 import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
 import { DashboardRecentActivityType } from "@/domain/business/DashboardService";
+import DashboardTaskCard from "@/components/dashboard/DashboardTaskCard";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 function getPriorityTone(tone: string) {
     if (tone === "red") {
@@ -37,55 +38,6 @@ function getPriorityTone(tone: string) {
     }
 
     return "border-blue-200 bg-blue-50 text-blue-700";
-}
-
-function getTaskTone(status: DashboardTaskStatus) {
-    if (status === "overdue") {
-        return {
-            card: "border-red-200 bg-red-50 hover:border-red-300 hover:bg-red-100/60",
-            icon: "bg-red-100 text-red-700",
-            title: "text-red-950",
-            meta: "text-red-700",
-            badge: "bg-red-100 text-red-700",
-            label: "Overdue",
-        };
-    }
-
-    if (status === "completed") {
-        return {
-            card: "border-green-200 bg-green-50 hover:border-green-300 hover:bg-green-100/60",
-            icon: "bg-green-100 text-green-700",
-            title: "text-green-950 line-through",
-            meta: "text-green-700 line-through",
-            badge: "bg-green-100 text-green-700",
-            label: "Completed",
-        };
-    }
-
-    return {
-        card: "border-slate-200 bg-slate-50 hover:border-blue-300 hover:bg-blue-50",
-        icon: "bg-slate-100 text-slate-600",
-        title: "text-slate-950",
-        meta: "text-slate-500",
-        badge: "bg-white text-slate-600",
-        label: "Scheduled",
-    };
-}
-
-function getTaskIcon(type: string) {
-    if (type === "Follow-up call") {
-        return Phone;
-    }
-
-    if (type === "Message") {
-        return MessageSquareReply;
-    }
-
-    if (type === "Appointment") {
-        return CalendarCheck;
-    }
-
-    return UserRound;
 }
 
 function getRecentActivityIcon(type: DashboardRecentActivityType) {
@@ -281,55 +233,9 @@ export default async function DashboardPage() {
                     </div>
 
                     <div className="max-h-[430px] space-y-4 overflow-y-auto pr-2">
-                        {dashboardData.todayTasks.map((task) => {
-                            const Icon = getTaskIcon(task.type);
-                            const tone = getTaskTone(task.status);
-                            const taskContent = (
-                                <>
-                                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${tone.icon}`}>
-                                        <Icon size={20} />
-                                    </div>
-
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <h3 className={`font-semibold ${tone.title}`}>
-                                                {task.title}
-                                            </h3>
-                                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${tone.badge}`}>
-                                                {tone.label}
-                                            </span>
-                                        </div>
-                                        <p className={`mt-1 text-sm ${tone.meta}`}>
-                                            {task.time} - {task.type} - score {task.score}
-                                        </p>
-                                        <p className={`mt-1 text-xs ${tone.meta}`}>
-                                            {task.leadName}
-                                        </p>
-                                    </div>
-                                </>
-                            );
-
-                            if (!task.leadId) {
-                                return (
-                                    <div
-                                        key={task.id}
-                                        className={`flex items-start gap-4 rounded-lg border p-4 transition ${tone.card}`}
-                                    >
-                                        {taskContent}
-                                    </div>
-                                );
-                            }
-
-                            return (
-                                <Link
-                                    key={task.id}
-                                    href={`/leads/${task.leadId}`}
-                                    className={`flex items-start gap-4 rounded-lg border p-4 transition ${tone.card}`}
-                                >
-                                    {taskContent}
-                                </Link>
-                            );
-                        })}
+                        {dashboardData.todayTasks.map((task) => (
+                            <DashboardTaskCard key={task.id} task={task} />
+                        ))}
 
                         {dashboardData.todayTasks.length === 0 ? (
                             <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">

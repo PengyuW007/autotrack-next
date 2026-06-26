@@ -293,6 +293,38 @@ describe("AgendaService", () => {
         expect(uniqueTasks[0].getEventID()).toBe(10);
     });
 
+    test("uses completed duplicate task when merging logical duplicates", () => {
+        const agendaService = createService();
+        const lead = new Lead({
+            leadID: 1,
+            firstName: "Duplicate",
+            stage: "NEW",
+            createdAt: new Date("2026-03-13"),
+        });
+        const uncompletedTask = new Task(
+            lead,
+            "Gratitude: Thank You & Info Swap",
+            new Date("2026-03-13T04:00:00"),
+            10
+        );
+        const completedTask = new Task(
+            lead,
+            "Gratitude: Thank You & Info Swap",
+            new Date("2026-03-13T04:00:00"),
+            11
+        );
+        completedTask.setCompleted(true);
+
+        const uniqueTasks = agendaService.getUniqueTasks([
+            uncompletedTask,
+            completedTask,
+        ]);
+
+        expect(uniqueTasks).toHaveLength(1);
+        expect(uniqueTasks[0].getEventID()).toBe(11);
+        expect(uniqueTasks[0].isCompleted()).toBe(true);
+    });
+
     test("generates silent milestone tasks without requiring follow-up date", () => {
         const agendaService = createService();
         const milestones = [

@@ -80,23 +80,52 @@ export default function TopBar() {
                   description: "Scientific sales follow-up system",
               };
 
-    const [currentTime, setCurrentTime] = useState(new Date());
+    const [currentTime, setCurrentTime] = useState<Date | null>(null);
     const [notificationsOpen, setNotificationsOpen] = useState(false);
     const [topbarNotifications, setTopbarNotifications] = useState<
         RecentActivityItem[]
     >([]);
-    const [readNotificationIds, setReadNotificationIds] = useState<string[]>(
-        () => {
-            if (typeof window === "undefined") {
-                return [];
-            }
+    const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+    const [notificationsLoading, setNotificationsLoading] = useState(true);
 
+    const date = currentTime
+        ? currentTime.toLocaleDateString("en-CA", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+          })
+        : "--";
+
+    const time = currentTime
+        ? currentTime.toLocaleTimeString("en-CA", {
+              hour: "2-digit",
+              minute: "2-digit",
+          })
+        : "--";
+
+    useEffect(() => {
+        const initialTimer = window.setTimeout(() => {
+            setCurrentTime(new Date());
+        }, 0);
+
+        const timer = setInterval(() => {
+            setCurrentTime(new Date());
+        }, 1000);
+
+        return () => {
+            window.clearTimeout(initialTimer);
+            clearInterval(timer);
+        };
+    }, []);
+
+    useEffect(() => {
+        const storageTimer = window.setTimeout(() => {
             const savedReadNotificationIds = window.localStorage.getItem(
                 READ_NOTIFICATION_STORAGE_KEY
             );
 
             if (!savedReadNotificationIds) {
-                return [];
+                return;
             }
 
             try {
@@ -105,42 +134,19 @@ export default function TopBar() {
                 );
 
                 if (Array.isArray(parsedReadNotificationIds)) {
-                    return parsedReadNotificationIds.filter(
-                        (value): value is string => typeof value === "string"
+                    setReadNotificationIds(
+                        parsedReadNotificationIds.filter(
+                            (value): value is string =>
+                                typeof value === "string"
+                        )
                     );
                 }
             } catch {
                 window.localStorage.removeItem(READ_NOTIFICATION_STORAGE_KEY);
             }
+        }, 0);
 
-            return [];
-        }
-    );
-    const [notificationsLoading, setNotificationsLoading] = useState(true);
-
-    const date = currentTime.toLocaleDateString(
-        "en-CA",
-        {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-        }
-    );
-
-    const time = currentTime.toLocaleTimeString(
-        "en-CA",
-        {
-            hour: "2-digit",
-            minute: "2-digit",
-        }
-    );
-
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setCurrentTime(new Date());
-        }, 1000);
-
-        return () => clearInterval(timer);
+        return () => window.clearTimeout(storageTimer);
     }, []);
 
     useEffect(() => {
@@ -192,10 +198,13 @@ export default function TopBar() {
             }
 
             const nextReadIds = [...currentReadIds, activityId];
-            window.localStorage.setItem(
-                READ_NOTIFICATION_STORAGE_KEY,
-                JSON.stringify(nextReadIds)
-            );
+
+            if (typeof window !== "undefined") {
+                window.localStorage.setItem(
+                    READ_NOTIFICATION_STORAGE_KEY,
+                    JSON.stringify(nextReadIds)
+                );
+            }
 
             return nextReadIds;
         });

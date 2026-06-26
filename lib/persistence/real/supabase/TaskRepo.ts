@@ -65,6 +65,19 @@ function formatTaskDateKey(date: Date): string {
     return `${year}-${month}-${day}`;
 }
 
+function getTaskDateRange(date: Date): { start: string; end: string } {
+    const startDate = new Date(date);
+    startDate.setHours(0, 0, 0, 0);
+
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 1);
+
+    return {
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+    };
+}
+
 function isSameLogicalTask(taskA: Task, taskB: Task): boolean {
     return (
         taskA.getLead()?.leadID === taskB.getLead()?.leadID &&
@@ -151,7 +164,9 @@ export class TaskRepo {
     }
 
     async updateTask(task: Task): Promise<string | null> {
-        if (!task.getLead()?.leadID) {
+        const leadId = task.getLead()?.leadID;
+
+        if (!leadId) {
             return "Task must be associated with a lead.";
         }
 
@@ -166,7 +181,13 @@ export class TaskRepo {
             .update(mapTaskToRow(task))
             .eq("task_id", task.getEventID());
 
-        return error?.message ?? null;
+        if (error) {
+            return error.message;
+        }
+
+        const duplicateError = await this.updateDuplicateTaskCompletion(task);
+
+        return duplicateError;
     }
 
     async deleteTask(id: number): Promise<string | null> {
@@ -180,6 +201,26 @@ export class TaskRepo {
             .from(TABLE_NAME)
             .delete()
             .eq("task_id", id);
+
+        return error?.message ?? null;
+    }
+
+    private async updateDuplicateTaskCompletion(task: Task): Promise<string | null> {
+        const leadId = task.getLead()?.leadID;
+
+        if (!leadId) {
+            return null;
+        }
+
+        const dateRange = getTaskDateRange(task.getDate());
+        const { error } = await supabase
+            .from(TABLE_NAME)
+            .update({ completed: task.isCompleted() })
+            .eq("lead_id", leadId)
+            .eq("title", task.getTitle())
+            .gte("task_date", dateRange.start)
+            .lt("task_date", dateRange.end)
+            .neq("task_id", task.getEventID());
 
         return error?.message ?? null;
     }
