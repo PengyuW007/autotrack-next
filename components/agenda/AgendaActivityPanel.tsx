@@ -70,10 +70,10 @@ export default function AgendaActivityPanel({
     function getTaskStyles(activity: AgendaActivity) {
         if (activity.completed) {
             return {
-                card: "border-slate-200 bg-slate-50 text-slate-500",
-                icon: "bg-slate-100 text-slate-500",
-                badge: "bg-slate-200 text-slate-700",
-                title: "line-through text-slate-500",
+                card: "border-green-200 bg-green-50 text-green-700",
+                icon: "bg-green-100 text-green-700",
+                badge: "bg-green-100 text-green-700",
+                title: "line-through text-green-800",
             };
         }
 
@@ -87,9 +87,9 @@ export default function AgendaActivityPanel({
         }
 
         return {
-            card: "border-green-200 bg-green-50",
-            icon: "bg-green-100 text-green-700",
-            badge: "bg-green-100 text-green-700",
+            card: "border-slate-200 bg-slate-50",
+            icon: "bg-slate-100 text-slate-600",
+            badge: "bg-slate-200 text-slate-700",
             title: "text-slate-950",
         };
     }
