@@ -62,6 +62,19 @@ function getPastUnfinishedTaskCounts(
     }, {});
 }
 
+function isSameTaskActivity(
+    activityA: AgendaActivity,
+    activityB: AgendaActivity
+): boolean {
+    return (
+        activityA.type === "TASK" &&
+        activityB.type === "TASK" &&
+        activityA.leadId === activityB.leadId &&
+        activityA.title === activityB.title &&
+        formatDateInput(activityA.date) === formatDateInput(activityB.date)
+    );
+}
+
 export default function AgendaPage() {
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     const [agendaActivities, setAgendaActivities] = useState<AgendaActivity[]>([]);
@@ -111,21 +124,17 @@ export default function AgendaPage() {
                 tasks,
                 new Date()
             );
-            const createdSystemTasks: Task[] = [];
 
             for (const task of systemTasks) {
-                const error = await taskRepo.insertTask(task);
-
-                if (!error) {
-                    createdSystemTasks.push(task);
-                }
+                await taskRepo.insertTask(task);
             }
 
             if (active) {
-                const allTasks = agendaService.getUniqueTasks([
-                    ...tasks,
-                    ...createdSystemTasks,
-                ]);
+                const persistedTasks =
+                    systemTasks.length > 0
+                        ? await taskRepo.getAllTasks()
+                        : tasks;
+                const allTasks = agendaService.getUniqueTasks(persistedTasks);
                 const now = new Date();
 
                 setAgendaActivities(
@@ -257,19 +266,20 @@ export default function AgendaPage() {
 
         setTogglingTaskIds((currentIds) => [...currentIds, activity.id]);
 
-        const taskRepo = new TaskRepo();
-        const task = await taskRepo.getTaskById(activity.id);
-
-        if (!task) {
+        if (activity.id < 0) {
+            setCreateError("This task has not been saved yet. Refresh Agenda and try again.");
             setTogglingTaskIds((currentIds) =>
                 currentIds.filter((taskId) => taskId !== activity.id)
             );
             return;
         }
 
-        task.setCompleted(!activity.completed);
-
-        const error = await taskRepo.updateTask(task);
+        const nextCompleted = !activity.completed;
+        const taskRepo = new TaskRepo();
+        const error = await taskRepo.updateTaskCompletion(
+            activity.id,
+            nextCompleted
+        );
 
         if (error) {
             setCreateError(error);
@@ -281,11 +291,10 @@ export default function AgendaPage() {
 
         setAgendaActivities((currentActivities) =>
             currentActivities.map((currentActivity) =>
-                currentActivity.type === "TASK" &&
-                currentActivity.id === activity.id
+                isSameTaskActivity(currentActivity, activity)
                     ? {
                           ...currentActivity,
-                          completed: !activity.completed,
+                          completed: nextCompleted,
                       }
                     : currentActivity
             )
@@ -315,7 +324,6 @@ export default function AgendaPage() {
             };
         });
 
-        setRefreshKey((currentKey) => currentKey + 1);
         setTogglingTaskIds((currentIds) =>
             currentIds.filter((taskId) => taskId !== activity.id)
         );
@@ -353,6 +361,15 @@ export default function AgendaPage() {
                         className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
                     >
                        Back to Today
+                    </button>
+
+                    <button
+                        onClick={() =>
+                            setRefreshKey((currentKey) => currentKey + 1)
+                        }
+                        className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                    >
+                        Refresh
                     </button>
                 </div>
             </div>

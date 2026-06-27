@@ -15,6 +15,7 @@ type TaskInsertRow = Omit<TaskRow, "task_id"> & {
 };
 
 const TABLE_NAME = "tasks";
+const QUERY_PAGE_SIZE = 1000;
 
 function padDatePart(value: number): string {
     return String(value).padStart(2, "0");
@@ -31,11 +32,25 @@ function createLeadReference(leadId: number | null): Lead | null {
     });
 }
 
+function parseTaskDateFromDatabase(value: string | null): Date {
+    if (!value) {
+        return new Date();
+    }
+
+    const [datePart, timePart = "00:00:00"] = value.split("T");
+    const [year, month, day] = datePart.split("-").map(Number);
+    const [hour = 0, minute = 0, second = 0] = timePart
+        .split(":")
+        .map((part) => Number(part.split(".")[0]));
+
+    return new Date(year, month - 1, day, hour, minute, second);
+}
+
 function mapRowToTask(row: TaskRow): Task {
     const task = new Task(
         createLeadReference(row.lead_id),
         row.title ?? "",
-        row.task_date ? new Date(row.task_date) : new Date(),
+        parseTaskDateFromDatabase(row.task_date),
         row.task_id
     );
 
@@ -164,16 +179,30 @@ function getCanonicalTasks(tasks: Task[]): Task[] {
 
 export class TaskRepo {
     async getAllTasks(): Promise<Task[]> {
-        const { data, error } = await supabase
-            .from(TABLE_NAME)
-            .select("*")
-            .order("task_date", { ascending: true });
+        const rows: TaskRow[] = [];
+        let start = 0;
 
-        if (error || !data) {
-            return [];
+        while (true) {
+            const { data, error } = await supabase
+                .from(TABLE_NAME)
+                .select("*")
+                .order("task_date", { ascending: true })
+                .range(start, start + QUERY_PAGE_SIZE - 1);
+
+            if (error || !data) {
+                return [];
+            }
+
+            rows.push(...data.map((row) => row as TaskRow));
+
+            if (data.length < QUERY_PAGE_SIZE) {
+                break;
+            }
+
+            start += QUERY_PAGE_SIZE;
         }
 
-        return getCanonicalTasks(data.map((row) => mapRowToTask(row as TaskRow)));
+        return getCanonicalTasks(rows.map(mapRowToTask));
     }
 
     async getTaskById(id: number): Promise<Task | null> {
@@ -191,17 +220,31 @@ export class TaskRepo {
     }
 
     async getTasksByLeadId(leadId: number): Promise<Task[]> {
-        const { data, error } = await supabase
-            .from(TABLE_NAME)
-            .select("*")
-            .eq("lead_id", leadId)
-            .order("task_date", { ascending: true });
+        const rows: TaskRow[] = [];
+        let start = 0;
 
-        if (error || !data) {
-            return [];
+        while (true) {
+            const { data, error } = await supabase
+                .from(TABLE_NAME)
+                .select("*")
+                .eq("lead_id", leadId)
+                .order("task_date", { ascending: true })
+                .range(start, start + QUERY_PAGE_SIZE - 1);
+
+            if (error || !data) {
+                return [];
+            }
+
+            rows.push(...data.map((row) => row as TaskRow));
+
+            if (data.length < QUERY_PAGE_SIZE) {
+                break;
+            }
+
+            start += QUERY_PAGE_SIZE;
         }
 
-        return getCanonicalTasks(data.map((row) => mapRowToTask(row as TaskRow)));
+        return getCanonicalTasks(rows.map(mapRowToTask));
     }
 
     async insertTask(task: Task): Promise<string | null> {
@@ -218,6 +261,10 @@ export class TaskRepo {
 
         if (existingTask) {
             task.setEventID(existingTask.getEventID());
+            task.setLead(existingTask.getLead());
+            task.setTitle(existingTask.getTitle());
+            task.setDate(existingTask.getDate());
+            task.setCompleted(existingTask.isCompleted());
             return null;
         }
 
@@ -263,6 +310,29 @@ export class TaskRepo {
         const duplicateError = await this.updateDuplicateTaskCompletion(task);
 
         return duplicateError;
+    }
+
+    async updateTaskCompletion(
+        id: number,
+        completed: boolean
+    ): Promise<string | null> {
+        const existingTask = await this.getTaskById(id);
+
+        if (!existingTask) {
+            return "Task not found.";
+        }
+
+        const { error } = await supabase
+            .from(TABLE_NAME)
+            .update({ completed })
+            .eq("task_id", id);
+
+        if (error) {
+            return error.message;
+        }
+
+        existingTask.setCompleted(completed);
+        return this.updateDuplicateTaskCompletion(existingTask);
     }
 
     async deleteTask(id: number): Promise<string | null> {

@@ -1,12 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import {
     Bell,
     CalendarCheck,
     CheckCircle2,
     Circle,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 import { AgendaActivity } from "@/domain/business/AgendaService";
 
@@ -34,8 +34,6 @@ export default function AgendaActivityPanel({
     togglingTaskIds,
     onToggleTask,
 }: Props) {
-    const router = useRouter();
-
     function isOverdue(activity: AgendaActivity) {
         return (
             activity.type === "TASK" &&
@@ -96,12 +94,6 @@ export default function AgendaActivityPanel({
         };
     }
 
-    function openLead(activity: AgendaActivity) {
-        if (activity.leadId) {
-            router.push(`/leads/${activity.leadId}`);
-        }
-    }
-
     return (
         <section className="min-h-[320px] rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
@@ -133,103 +125,96 @@ export default function AgendaActivityPanel({
                             : null;
                         const toggling = togglingTaskIds.includes(activity.id);
 
+                        const activityContent = (
+                            <>
+                                <div
+                                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                                        isTask
+                                            ? taskStyles?.icon
+                                            : "bg-amber-50 text-amber-600"
+                                    }`}
+                                >
+                                    <Icon size={20} />
+                                </div>
+
+                                <div>
+                                    <h3
+                                        className={`font-semibold ${
+                                            isTask
+                                                ? taskStyles?.title
+                                                : "text-slate-950"
+                                        }`}
+                                    >
+                                        {activity.title}
+                                    </h3>
+                                    <p className="mt-1 text-sm text-slate-500">
+                                        {activity.leadName} - {formatTime(activity.date)}
+                                    </p>
+                                </div>
+                            </>
+                        );
+
                         return (
-                            <div
+                            <article
                                 key={`${activity.type}-${activity.id}`}
-                                onClick={() => openLead(activity)}
-                                onKeyDown={(event) => {
-                                    if (
-                                        activity.leadId &&
-                                        (event.key === "Enter" ||
-                                            event.key === " ")
-                                    ) {
-                                        event.preventDefault();
-                                        openLead(activity);
-                                    }
-                                }}
-                                role={activity.leadId ? "button" : undefined}
-                                tabIndex={activity.leadId ? 0 : undefined}
-                                className={`w-full rounded-lg border p-4 text-left transition ${
-                                    activity.leadId
-                                        ? "cursor-pointer hover:shadow-sm"
-                                        : ""
-                                } ${
+                                className={`flex w-full items-start justify-between gap-4 rounded-lg border p-4 text-left transition ${
                                     isTask
                                         ? taskStyles?.card
                                         : "border-slate-200 bg-white"
                                 }`}
                             >
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="flex gap-3">
-                                        <div
-                                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                                                isTask
-                                                    ? taskStyles?.icon
-                                                    : "bg-amber-50 text-amber-600"
-                                            }`}
-                                        >
-                                            <Icon size={20} />
-                                        </div>
-
-                                        <div>
-                                            <h3
-                                                className={`font-semibold ${
-                                                    isTask
-                                                        ? taskStyles?.title
-                                                        : "text-slate-950"
-                                                }`}
-                                            >
-                                                {activity.title}
-                                            </h3>
-                                            <p className="mt-1 text-sm text-slate-500">
-                                                {activity.leadName} - {formatTime(activity.date)}
-                                            </p>
-                                        </div>
+                                {activity.leadId ? (
+                                    <Link
+                                        href={`/leads/${activity.leadId}`}
+                                        className="flex min-w-0 flex-1 gap-3 hover:opacity-80"
+                                    >
+                                        {activityContent}
+                                    </Link>
+                                ) : (
+                                    <div className="flex min-w-0 flex-1 gap-3">
+                                        {activityContent}
                                     </div>
+                                )}
 
-                                    {isTask ? (
-                                        <button
-                                            type="button"
-                                            disabled={toggling}
-                                            onMouseDown={(event) => {
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                            }}
-                                            onClick={(event) => {
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                                void onToggleTask(activity);
-                                            }}
-                                            onKeyDown={(event) => {
-                                                event.stopPropagation();
-                                            }}
-                                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold disabled:cursor-wait disabled:opacity-60 ${taskStyles?.badge}`}
-                                            aria-label={`Mark task as ${
-                                                activity.completed
-                                                    ? "uncompleted"
-                                                    : "completed"
-                                            }`}
-                                        >
-                                            {activity.completed ? (
-                                                <CheckCircle2 size={14} />
-                                            ) : (
-                                                <Circle size={14} />
-                                            )}
-                                            {toggling
-                                                ? "Saving..."
-                                                : activity.completed
-                                                  ? "Completed"
-                                                  : isOverdue(activity)
-                                                    ? "Overdue"
-                                                    : "Uncompleted"}
-                                        </button>
-                                    ) : (
-                                        <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                                            Notification
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
+                                {isTask ? (
+                                    <button
+                                        type="button"
+                                        disabled={toggling}
+                                        onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                        }}
+                                        onClick={(event) => {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            void onToggleTask(activity);
+                                        }}
+                                        className={`inline-flex min-w-28 shrink-0 items-center justify-center gap-1 rounded-full px-3 py-2 text-xs font-semibold disabled:cursor-wait disabled:opacity-60 ${taskStyles?.badge}`}
+                                        aria-label={`Mark task as ${
+                                            activity.completed
+                                                ? "uncompleted"
+                                                : "completed"
+                                        }`}
+                                    >
+                                        {activity.completed ? (
+                                            <CheckCircle2 size={14} />
+                                        ) : (
+                                            <Circle size={14} />
+                                        )}
+                                        {toggling
+                                            ? "Saving..."
+                                            : activity.completed
+                                              ? "Completed"
+                                              : isOverdue(activity)
+                                                ? "Overdue"
+                                                : "Uncompleted"}
+                                    </button>
+                                ) : (
+                                    <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                                        Notification
+                                    </span>
+                                )}
+                            </article>
                         );
                     })}
 

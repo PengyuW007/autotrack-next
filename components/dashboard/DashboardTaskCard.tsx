@@ -105,15 +105,10 @@ export default function DashboardTaskCard({ task }: DashboardTaskCardProps) {
 
         try {
             const taskRepo = new TaskRepo();
-            const persistedTask = await taskRepo.getTaskById(task.id);
-
-            if (!persistedTask) {
-                setErrorMessage("Task not found.");
-                return;
-            }
-
-            persistedTask.setCompleted(nextCompleted);
-            const error = await taskRepo.updateTask(persistedTask);
+            const error = await taskRepo.updateTaskCompletion(
+                task.id,
+                nextCompleted
+            );
 
             if (error) {
                 setErrorMessage(error);

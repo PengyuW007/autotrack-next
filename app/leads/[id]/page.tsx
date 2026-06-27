@@ -172,15 +172,15 @@ export default async function LeadDetailPage({
             leadTasks,
             new Date()
         );
-    const createdSystemTasks: Task[] = [];
 
     for (const task of missingSystemTasks) {
-        const error = await taskRepository.insertTask(task);
-
-        if (!error) {
-            createdSystemTasks.push(task);
-        }
+        await taskRepository.insertTask(task);
     }
+
+    const persistedLeadTasks =
+        missingSystemTasks.length > 0
+            ? await taskRepository.getTasksByLeadId(lead.leadID)
+            : leadTasks;
 
     lead.vehicleInterest = vehicleInterest;
     lead.tradeInVehicle = tradeInVehicle;
@@ -198,7 +198,7 @@ export default async function LeadDetailPage({
                 lead={toLeadDetailViewModel(lead, scoringService)}
                 tasks={sortTaskViewModelsByNewest(
                     agendaService
-                        .getUniqueTasks([...leadTasks, ...createdSystemTasks])
+                        .getUniqueTasks(persistedLeadTasks)
                         .map(toTaskViewModel)
                 )}
                 notifications={leadNotifications.map(toNotificationViewModel)}

@@ -17,7 +17,6 @@ import { AgendaService } from "@/domain/business/AgendaService";
 import { DashboardService } from "@/domain/business/DashboardService";
 import { PriorityManager } from "@/domain/business/PriorityManager";
 import { ScoringService } from "@/domain/business/ScoringService";
-import { Task } from "@/domain/objects/Task";
 import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
 import { NotificationRepo } from "@/lib/persistence/real/supabase/NotificationRepo";
 import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
@@ -85,20 +84,14 @@ export default async function DashboardPage() {
         tasks,
         targetDate
     );
-    const createdSystemTasks: Task[] = [];
 
     for (const task of systemTasks) {
-        const error = await taskRepo.insertTask(task);
-
-        if (!error) {
-            createdSystemTasks.push(task);
-        }
+        await taskRepo.insertTask(task);
     }
 
-    const allTasks = agendaService.getUniqueTasks([
-        ...tasks,
-        ...createdSystemTasks,
-    ]);
+    const persistedTasks =
+        systemTasks.length > 0 ? await taskRepo.getAllTasks() : tasks;
+    const allTasks = agendaService.getUniqueTasks(persistedTasks);
 
     const dashboardData = dashboardService.getDashboardData(
         leads,
@@ -234,7 +227,10 @@ export default async function DashboardPage() {
 
                     <div className="max-h-[430px] space-y-4 overflow-y-auto pr-2">
                         {dashboardData.todayTasks.map((task) => (
-                            <DashboardTaskCard key={task.id} task={task} />
+                            <DashboardTaskCard
+                                key={`${task.id}-${task.status}`}
+                                task={task}
+                            />
                         ))}
 
                         {dashboardData.todayTasks.length === 0 ? (
