@@ -315,6 +315,7 @@ export default function AgendaPage() {
             };
         });
 
+        setRefreshKey((currentKey) => currentKey + 1);
         setTogglingTaskIds((currentIds) =>
             currentIds.filter((taskId) => taskId !== activity.id)
         );

@@ -191,7 +191,12 @@ export default function AgendaActivityPanel({
                                         <button
                                             type="button"
                                             disabled={toggling}
+                                            onMouseDown={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                            }}
                                             onClick={(event) => {
+                                                event.preventDefault();
                                                 event.stopPropagation();
                                                 void onToggleTask(activity);
                                             }}

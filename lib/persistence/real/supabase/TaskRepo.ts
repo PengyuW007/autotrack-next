@@ -16,6 +16,10 @@ type TaskInsertRow = Omit<TaskRow, "task_id"> & {
 
 const TABLE_NAME = "tasks";
 
+function padDatePart(value: number): string {
+    return String(value).padStart(2, "0");
+}
+
 function createLeadReference(leadId: number | null): Lead | null {
     if (!leadId) {
         return null;
@@ -45,7 +49,7 @@ function mapTaskToRow(task: Task): TaskInsertRow {
     const row: TaskInsertRow = {
         lead_id: leadId,
         title: task.getTitle(),
-        task_date: task.getDate().toISOString(),
+        task_date: formatTaskDateTimeForDatabase(task.getDate()),
         completed: task.isCompleted(),
     };
 
@@ -58,11 +62,30 @@ function mapTaskToRow(task: Task): TaskInsertRow {
 
 function formatTaskDateKey(date: Date): string {
     const normalizedDate = new Date(date);
-    const year = normalizedDate.getFullYear();
-    const month = String(normalizedDate.getMonth() + 1).padStart(2, "0");
-    const day = String(normalizedDate.getDate()).padStart(2, "0");
 
-    return `${year}-${month}-${day}`;
+    return [
+        normalizedDate.getFullYear(),
+        padDatePart(normalizedDate.getMonth() + 1),
+        padDatePart(normalizedDate.getDate()),
+    ].join("-");
+}
+
+function formatTaskDateTimeForDatabase(date: Date): string {
+    const normalizedDate = new Date(date);
+
+    return `${formatTaskDateKey(normalizedDate)}T${padDatePart(
+        normalizedDate.getHours()
+    )}:${padDatePart(normalizedDate.getMinutes())}:${padDatePart(
+        normalizedDate.getSeconds()
+    )}`;
+}
+
+function getTaskLogicalKey(task: Task): string {
+    return [
+        task.getLead()?.leadID ?? "no-lead",
+        task.getTitle(),
+        formatTaskDateKey(task.getDate()),
+    ].join("|");
 }
 
 function getTaskDateRange(date: Date): { start: string; end: string } {
@@ -73,8 +96,8 @@ function getTaskDateRange(date: Date): { start: string; end: string } {
     endDate.setDate(endDate.getDate() + 1);
 
     return {
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
+        start: formatTaskDateTimeForDatabase(startDate),
+        end: formatTaskDateTimeForDatabase(endDate),
     };
 }
 
@@ -84,6 +107,58 @@ function isSameLogicalTask(taskA: Task, taskB: Task): boolean {
         taskA.getTitle() === taskB.getTitle() &&
         formatTaskDateKey(taskA.getDate()) ===
             formatTaskDateKey(taskB.getDate())
+    );
+}
+
+function shouldReplaceCanonicalTask(currentTask: Task, candidateTask: Task): boolean {
+    if (currentTask.getEventID() === -1 && candidateTask.getEventID() !== -1) {
+        return true;
+    }
+
+    if (candidateTask.getEventID() === -1 && currentTask.getEventID() !== -1) {
+        return false;
+    }
+
+    const timeDiff =
+        candidateTask.getDate().getTime() - currentTask.getDate().getTime();
+
+    if (timeDiff !== 0) {
+        return timeDiff < 0;
+    }
+
+    return candidateTask.getEventID() < currentTask.getEventID();
+}
+
+function mergeDuplicateTaskState(currentTask: Task, duplicateTask: Task): Task {
+    if (duplicateTask.isCompleted()) {
+        currentTask.setCompleted(true);
+    }
+
+    return currentTask;
+}
+
+function getCanonicalTasks(tasks: Task[]): Task[] {
+    const canonicalTasks = new Map<string, Task>();
+
+    for (const task of tasks) {
+        const key = getTaskLogicalKey(task);
+        const currentTask = canonicalTasks.get(key);
+
+        if (!currentTask) {
+            canonicalTasks.set(key, task);
+            continue;
+        }
+
+        if (shouldReplaceCanonicalTask(currentTask, task)) {
+            canonicalTasks.set(key, mergeDuplicateTaskState(task, currentTask));
+            continue;
+        }
+
+        mergeDuplicateTaskState(currentTask, task);
+    }
+
+    return [...canonicalTasks.values()].sort(
+        (taskA, taskB) => taskA.getDate().getTime() - taskB.getDate().getTime()
     );
 }
 
@@ -98,7 +173,7 @@ export class TaskRepo {
             return [];
         }
 
-        return data.map((row) => mapRowToTask(row as TaskRow));
+        return getCanonicalTasks(data.map((row) => mapRowToTask(row as TaskRow)));
     }
 
     async getTaskById(id: number): Promise<Task | null> {
@@ -126,7 +201,7 @@ export class TaskRepo {
             return [];
         }
 
-        return data.map((row) => mapRowToTask(row as TaskRow));
+        return getCanonicalTasks(data.map((row) => mapRowToTask(row as TaskRow)));
     }
 
     async insertTask(task: Task): Promise<string | null> {

@@ -321,7 +321,38 @@ describe("AgendaService", () => {
         ]);
 
         expect(uniqueTasks).toHaveLength(1);
-        expect(uniqueTasks[0].getEventID()).toBe(11);
+        expect(uniqueTasks[0].getEventID()).toBe(10);
+        expect(uniqueTasks[0].isCompleted()).toBe(true);
+    });
+
+    test("does not let generated tasks duplicate persisted real tasks", () => {
+        const agendaService = createService();
+        const lead = new Lead({
+            leadID: 1,
+            firstName: "Duplicate",
+            stage: "NEW",
+            createdAt: new Date("2026-03-13"),
+        });
+        const persistedTask = new Task(
+            lead,
+            "Gratitude: Thank You & Info Swap",
+            new Date("2026-03-13T04:00:00"),
+            10
+        );
+        persistedTask.setCompleted(true);
+        const generatedTask = new Task(
+            lead,
+            "Gratitude: Thank You & Info Swap",
+            new Date("2026-03-13T04:00:00")
+        );
+
+        const uniqueTasks = agendaService.getUniqueTasks([
+            generatedTask,
+            persistedTask,
+        ]);
+
+        expect(uniqueTasks).toHaveLength(1);
+        expect(uniqueTasks[0].getEventID()).toBe(10);
         expect(uniqueTasks[0].isCompleted()).toBe(true);
     });
 

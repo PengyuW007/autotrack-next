@@ -282,20 +282,12 @@ export class AgendaService {
                 continue;
             }
 
-            if (task.isCompleted() && !existingTask.isCompleted()) {
-                uniqueTaskMap.set(key, task);
-                continue;
+            if (task.isCompleted()) {
+                existingTask.setCompleted(true);
             }
 
-            if (!task.isCompleted() && existingTask.isCompleted()) {
-                continue;
-            }
-
-            if (
-                existingTask.getEventID() === -1 ||
-                (task.getEventID() !== -1 &&
-                    task.getEventID() < existingTask.getEventID())
-            ) {
+            if (this.shouldReplaceTaskForDisplay(existingTask, task)) {
+                task.setCompleted(task.isCompleted() || existingTask.isCompleted());
                 uniqueTaskMap.set(key, task);
             }
         }
@@ -312,6 +304,34 @@ export class AgendaService {
             this.formatDate(task.getDate()),
             task.getTitle(),
         ].join("|");
+    }
+
+    private shouldReplaceTaskForDisplay(
+        existingTask: Task,
+        candidateTask: Task
+    ): boolean {
+        if (
+            existingTask.getEventID() === -1 &&
+            candidateTask.getEventID() !== -1
+        ) {
+            return true;
+        }
+
+        if (
+            candidateTask.getEventID() === -1 &&
+            existingTask.getEventID() !== -1
+        ) {
+            return false;
+        }
+
+        const timeDiff =
+            candidateTask.getDate().getTime() - existingTask.getDate().getTime();
+
+        if (timeDiff !== 0) {
+            return timeDiff < 0;
+        }
+
+        return candidateTask.getEventID() < existingTask.getEventID();
     }
 
     private resetTime(date: Date): Date {

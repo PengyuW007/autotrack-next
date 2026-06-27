@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { MouseEvent, useState } from "react";
 import {
     CalendarCheck,
     CheckCircle2,
@@ -79,15 +79,27 @@ export default function DashboardTaskCard({ task }: DashboardTaskCardProps) {
     const router = useRouter();
     const [updating, setUpdating] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [optimisticCompleted, setOptimisticCompleted] = useState<
+        boolean | null
+    >(null);
 
-    const tone = getTaskTone(task.status);
-    const isCompleted = task.status === "completed";
+    const completed = optimisticCompleted ?? task.status === "completed";
+    const displayStatus: DashboardTaskStatus = completed
+        ? "completed"
+        : task.status === "completed"
+          ? "scheduled"
+          : task.status;
+    const tone = getTaskTone(displayStatus);
 
-    async function toggleTaskCompletion() {
+    async function toggleTaskCompletion(event: MouseEvent<HTMLButtonElement>) {
+        event.preventDefault();
+        event.stopPropagation();
+
         if (updating) {
             return;
         }
 
+        const nextCompleted = !completed;
         setUpdating(true);
         setErrorMessage(null);
 
@@ -100,7 +112,7 @@ export default function DashboardTaskCard({ task }: DashboardTaskCardProps) {
                 return;
             }
 
-            persistedTask.setCompleted(!isCompleted);
+            persistedTask.setCompleted(nextCompleted);
             const error = await taskRepo.updateTask(persistedTask);
 
             if (error) {
@@ -108,6 +120,7 @@ export default function DashboardTaskCard({ task }: DashboardTaskCardProps) {
                 return;
             }
 
+            setOptimisticCompleted(nextCompleted);
             router.refresh();
         } catch (error) {
             setErrorMessage(
@@ -172,22 +185,26 @@ export default function DashboardTaskCard({ task }: DashboardTaskCardProps) {
             <button
                 type="button"
                 onClick={toggleTaskCompletion}
+                onMouseDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }}
                 disabled={updating}
                 className={`inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${tone.button}`}
                 aria-label={
-                    isCompleted
+                    completed
                         ? `Mark ${task.title} as uncompleted`
                         : `Mark ${task.title} as completed`
                 }
             >
                 {updating ? (
                     <Loader2 className="animate-spin" size={15} />
-                ) : isCompleted ? (
+                ) : completed ? (
                     <CheckCircle2 size={15} />
                 ) : (
                     <Circle size={15} />
                 )}
-                {isCompleted ? "Completed" : "Complete"}
+                {completed ? "Completed" : "Complete"}
             </button>
         </article>
     );

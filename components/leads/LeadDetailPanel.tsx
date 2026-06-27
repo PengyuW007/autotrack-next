@@ -147,6 +147,33 @@ function formatTaskDateTime(task: LeadDetailTaskViewModel) {
     }).format(toTaskDateTime(task.date, task.time));
 }
 
+function toTaskDateInputValue(date: Date) {
+    const normalizedDate = new Date(date);
+    const year = normalizedDate.getFullYear();
+    const month = String(normalizedDate.getMonth() + 1).padStart(2, "0");
+    const day = String(normalizedDate.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+}
+
+function toTaskTimeInputValue(date: Date) {
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+
+    return `${hours}:${minutes}`;
+}
+
+function toTaskViewModel(task: Task): LeadDetailTaskViewModel {
+    return {
+        taskID: task.getEventID(),
+        title: task.getTitle(),
+        date: toTaskDateInputValue(task.getDate()),
+        time: toTaskTimeInputValue(task.getDate()),
+        completed: task.isCompleted(),
+        leadID: task.getLead()?.leadID ?? null,
+    };
+}
+
 function getVehicleSelectionFromLead(
     lead: LeadDetailViewModel
 ): VehicleSelection {
@@ -322,6 +349,14 @@ export default function LeadDetailPanel({
         []
     );
 
+    async function reloadLeadTasks(taskRepository = new TaskRepo()) {
+        const refreshedTasks = await taskRepository.getTasksByLeadId(
+            currentLead.leadID
+        );
+
+        setLeadTasks(sortTasksByNewest(refreshedTasks.map(toTaskViewModel)));
+    }
+
     const fullName = useMemo(
         () => `${currentLead.firstName} ${currentLead.lastName}`.trim(),
         [currentLead.firstName, currentLead.lastName]
@@ -479,13 +514,7 @@ export default function LeadDetailPanel({
                 return;
             }
 
-            setLeadTasks((currentTasks) =>
-                sortTasksByNewest(
-                    currentTasks.map((task) =>
-                        task.taskID === taskID ? nextTask : task
-                    )
-                )
-            );
+            await reloadLeadTasks(taskRepository);
             router.refresh();
         } catch (error) {
             setErrorMessage(
@@ -537,15 +566,7 @@ export default function LeadDetailPanel({
                 return;
             }
 
-            setLeadTasks((currentTasks) =>
-                sortTasksByNewest([
-                    ...currentTasks,
-                    {
-                        ...taskViewModel,
-                        taskID: task.getEventID(),
-                    },
-                ])
-            );
+            await reloadLeadTasks(taskRepository);
             setNewTaskTitle("");
             setNewTaskDate(new Date().toISOString().split("T")[0]);
             setNewTaskTime("09:00");
@@ -674,13 +695,7 @@ export default function LeadDetailPanel({
                 return;
             }
 
-            setLeadTasks((currentTasks) =>
-                sortTasksByNewest(
-                    currentTasks.map((task) =>
-                        task.taskID === taskID ? nextTask : task
-                    )
-                )
-            );
+            await reloadLeadTasks(taskRepository);
             cancelEditingTask();
             router.refresh();
         } catch (error) {
@@ -705,9 +720,7 @@ export default function LeadDetailPanel({
                 return;
             }
 
-            setLeadTasks((currentTasks) =>
-                currentTasks.filter((task) => task.taskID !== taskID)
-            );
+            await reloadLeadTasks(taskRepository);
 
             if (editingTaskId === taskID) {
                 cancelEditingTask();
