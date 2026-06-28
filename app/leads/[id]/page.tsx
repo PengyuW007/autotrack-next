@@ -91,6 +91,8 @@ function toTaskViewModel(task: Task): LeadDetailTaskViewModel {
     return {
         taskID: task.getEventID(),
         title: task.getTitle(),
+        taskType: task.getTaskType(),
+        notes: task.getNotes(),
         date: toDateInputValue(task.getDate()),
         time: toTimeInputValue(task.getDate()),
         completed: task.isCompleted(),

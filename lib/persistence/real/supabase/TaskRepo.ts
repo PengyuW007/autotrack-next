@@ -8,6 +8,8 @@ type TaskRow = {
     title: string | null;
     task_date: string | null;
     completed: boolean | null;
+    task_type?: string | null;
+    notes?: string | null;
 };
 
 type TaskInsertRow = Omit<TaskRow, "task_id"> & {
@@ -51,14 +53,19 @@ function mapRowToTask(row: TaskRow): Task {
         createLeadReference(row.lead_id),
         row.title ?? "",
         parseTaskDateFromDatabase(row.task_date),
-        row.task_id
+        row.task_id,
+        row.task_type ?? "",
+        row.notes ?? ""
     );
 
     task.setCompleted(row.completed ?? false);
     return task;
 }
 
-function mapTaskToRow(task: Task): TaskInsertRow {
+function mapTaskToRow(
+    task: Task,
+    includeTaskDetails: boolean = true
+): TaskInsertRow {
     const leadId = task.getLead()?.leadID ?? null;
 
     const row: TaskInsertRow = {
@@ -72,7 +79,21 @@ function mapTaskToRow(task: Task): TaskInsertRow {
         row.task_id = task.getEventID();
     }
 
+    if (includeTaskDetails) {
+        row.task_type = task.getTaskType() || null;
+        row.notes = task.getNotes() || null;
+    }
+
     return row;
+}
+
+function isTaskDetailsColumnError(message: string): boolean {
+    const normalizedMessage = message.toLowerCase();
+
+    return (
+        normalizedMessage.includes("task_type") ||
+        normalizedMessage.includes("notes")
+    );
 }
 
 function formatTaskDateKey(date: Date): string {
@@ -265,14 +286,27 @@ export class TaskRepo {
             task.setTitle(existingTask.getTitle());
             task.setDate(existingTask.getDate());
             task.setCompleted(existingTask.isCompleted());
+            task.setTaskType(existingTask.getTaskType());
+            task.setNotes(existingTask.getNotes());
             return null;
         }
 
-        const { data, error } = await supabase
+        let { data, error } = await supabase
             .from(TABLE_NAME)
             .insert(mapTaskToRow(task))
             .select("*")
             .single();
+
+        if (error && isTaskDetailsColumnError(error.message)) {
+            const retryResult = await supabase
+                .from(TABLE_NAME)
+                .insert(mapTaskToRow(task, false))
+                .select("*")
+                .single();
+
+            data = retryResult.data;
+            error = retryResult.error;
+        }
 
         if (error) {
             return error.message;
@@ -298,10 +332,19 @@ export class TaskRepo {
             return "Task not found.";
         }
 
-        const { error } = await supabase
+        let { error } = await supabase
             .from(TABLE_NAME)
             .update(mapTaskToRow(task))
             .eq("task_id", task.getEventID());
+
+        if (error && isTaskDetailsColumnError(error.message)) {
+            const retryResult = await supabase
+                .from(TABLE_NAME)
+                .update(mapTaskToRow(task, false))
+                .eq("task_id", task.getEventID());
+
+            error = retryResult.error;
+        }
 
         if (error) {
             return error.message;

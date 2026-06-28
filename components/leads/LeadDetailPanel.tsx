@@ -39,6 +39,8 @@ import VehicleInterestSelector from "@/components/leads/VehicleInterestSelector"
 export interface LeadDetailTaskViewModel {
     taskID: number;
     title: string;
+    taskType: string;
+    notes: string;
     date: string;
     time: string;
     completed: boolean;
@@ -104,6 +106,18 @@ const stageOptions = [
     "CLOSED",
 ];
 
+const taskTypeOptions = [
+    "Follow-up",
+    "Appointment",
+    "Virtual Appointment",
+    "Test Drive",
+    "Pricing Request",
+    "Trade-in Discussion",
+    "Document Collection",
+    "Delivery Preparation",
+    "General Reminder",
+];
+
 const currencyFormatter = new Intl.NumberFormat("en-CA", {
     style: "currency",
     currency: "CAD",
@@ -167,6 +181,8 @@ function toTaskViewModel(task: Task): LeadDetailTaskViewModel {
     return {
         taskID: task.getEventID(),
         title: task.getTitle(),
+        taskType: task.getTaskType(),
+        notes: task.getNotes(),
         date: toTaskDateInputValue(task.getDate()),
         time: toTaskTimeInputValue(task.getDate()),
         completed: task.isCompleted(),
@@ -279,7 +295,9 @@ function createTaskFromViewModel(task: LeadDetailTaskViewModel) {
         leadReference,
         task.title,
         toTaskDateTime(task.date, task.time),
-        task.taskID
+        task.taskID,
+        task.taskType,
+        task.notes
     );
 
     nextTask.setCompleted(task.completed);
@@ -335,12 +353,14 @@ export default function LeadDetailPanel({
     >(null);
     const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [newTaskTitle, setNewTaskTitle] = useState("");
+    const [newTaskType, setNewTaskType] = useState(taskTypeOptions[0]);
+    const [newTaskNotes, setNewTaskNotes] = useState("");
     const [newTaskDate, setNewTaskDate] = useState(
         new Date().toISOString().split("T")[0]
     );
     const [newTaskTime, setNewTaskTime] = useState("09:00");
     const [draftTaskTitle, setDraftTaskTitle] = useState("");
+    const [draftTaskNotes, setDraftTaskNotes] = useState("");
     const [draftTaskDate, setDraftTaskDate] = useState("");
     const [draftTaskTime, setDraftTaskTime] = useState("");
     const scoringService = useMemo(() => new ScoringService(), []);
@@ -526,10 +546,11 @@ export default function LeadDetailPanel({
     }
 
     async function handleCreateTask() {
-        const title = newTaskTitle.trim();
+        const taskType = newTaskType.trim();
+        const notes = newTaskNotes.trim();
 
-        if (!title) {
-            setErrorMessage("Task title is required.");
+        if (!taskType) {
+            setErrorMessage("Task type is required.");
             return;
         }
 
@@ -548,7 +569,9 @@ export default function LeadDetailPanel({
 
         const taskViewModel: LeadDetailTaskViewModel = {
             taskID: -1,
-            title,
+            title: taskType,
+            taskType,
+            notes,
             date: newTaskDate,
             time: newTaskTime,
             completed: false,
@@ -567,7 +590,8 @@ export default function LeadDetailPanel({
             }
 
             await reloadLeadTasks(taskRepository);
-            setNewTaskTitle("");
+            setNewTaskType(taskTypeOptions[0]);
+            setNewTaskNotes("");
             setNewTaskDate(new Date().toISOString().split("T")[0]);
             setNewTaskTime("09:00");
             router.refresh();
@@ -638,6 +662,7 @@ export default function LeadDetailPanel({
     function startEditingTask(task: LeadDetailTaskViewModel) {
         setEditingTaskId(task.taskID);
         setDraftTaskTitle(task.title);
+        setDraftTaskNotes(task.notes);
         setDraftTaskDate(task.date);
         setDraftTaskTime(task.time || "09:00");
         setErrorMessage(null);
@@ -646,6 +671,7 @@ export default function LeadDetailPanel({
     function cancelEditingTask() {
         setEditingTaskId(null);
         setDraftTaskTitle("");
+        setDraftTaskNotes("");
         setDraftTaskDate("");
         setDraftTaskTime("");
         setErrorMessage(null);
@@ -677,6 +703,8 @@ export default function LeadDetailPanel({
         const nextTask = {
             ...targetTask,
             title,
+            taskType: targetTask.taskType || title,
+            notes: draftTaskNotes.trim(),
             date: draftTaskDate,
             time: draftTaskTime,
         };
@@ -1278,13 +1306,29 @@ export default function LeadDetailPanel({
                                 <p className="text-sm font-semibold text-slate-950">
                                     Add Task for This Lead
                                 </p>
-                                <div className="mt-3 grid gap-3 md:grid-cols-[1fr_150px_120px_auto]">
-                                    <input
-                                        value={newTaskTitle}
+                                <div className="mt-3 grid gap-3 md:grid-cols-[220px_1fr_150px_120px_auto]">
+                                    <select
+                                        value={newTaskType}
                                         onChange={(event) =>
-                                            setNewTaskTitle(event.target.value)
+                                            setNewTaskType(event.target.value)
                                         }
-                                        placeholder="Task title"
+                                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
+                                    >
+                                        {taskTypeOptions.map((taskType) => (
+                                            <option
+                                                key={taskType}
+                                                value={taskType}
+                                            >
+                                                {taskType}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <input
+                                        value={newTaskNotes}
+                                        onChange={(event) =>
+                                            setNewTaskNotes(event.target.value)
+                                        }
+                                        placeholder="Short notes or description"
                                         className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
                                     />
                                     <input
@@ -1335,6 +1379,16 @@ export default function LeadDetailPanel({
                                                                 event.target.value
                                                             )
                                                         }
+                                                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
+                                                    />
+                                                    <input
+                                                        value={draftTaskNotes}
+                                                        onChange={(event) =>
+                                                            setDraftTaskNotes(
+                                                                event.target.value
+                                                            )
+                                                        }
+                                                        placeholder="Short notes or description"
                                                         className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
                                                     />
                                                     <div className="grid gap-3 md:grid-cols-[1fr_1fr]">
@@ -1390,6 +1444,11 @@ export default function LeadDetailPanel({
                                                         <p className="font-semibold text-slate-950">
                                                             {task.title}
                                                         </p>
+                                                        {task.notes ? (
+                                                            <p className="mt-1 text-sm text-slate-600">
+                                                                {task.notes}
+                                                            </p>
+                                                        ) : null}
                                                         <p className="mt-1 text-sm text-slate-500">
                                                             {formatTaskDateTime(task)}
                                                         </p>
