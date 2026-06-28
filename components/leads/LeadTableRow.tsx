@@ -86,7 +86,7 @@ export default function LeadTableRow({
 
             <td className="px-4 py-4">
                 {lead.tradeInVehicle
-                    ? `Yes - ${lead.tradeInVehicle.getFullDescription()}`
+                    ? lead.tradeInVehicle.getFullDescription()
                     : "No"}
             </td>
 
