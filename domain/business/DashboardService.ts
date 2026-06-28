@@ -297,6 +297,27 @@ export class DashboardService {
             });
         }
 
+        if (candidateMap.size === 0) {
+            for (const leadCandidate of this.getFallbackPriorityCandidates(
+                highPriorityLeadMap,
+                leads
+            )) {
+                this.upsertPriorityCandidate(candidateMap, {
+                    lead: leadCandidate.lead,
+                    score: leadCandidate.score,
+                    priorityLevel: leadCandidate.priorityLevel,
+                    reasonLabel: "Top Recommended Lead",
+                    reason: "No lead currently exceeds the high-priority threshold, so this lead is shown as one of the strongest active opportunities.",
+                    actionRank: 50,
+                    nextFollowUpDate: leadCandidate.lead.followUpDate ?? null,
+                    activityDate:
+                        leadCandidate.lead.lastInteractionDate ??
+                        leadCandidate.lead.followUpDate ??
+                        null,
+                });
+            }
+        }
+
         return [...candidateMap.values()]
             .sort((candidateA, candidateB) => {
                 const scoreDiff = candidateB.score - candidateA.score;
@@ -311,6 +332,49 @@ export class DashboardService {
                 );
             })
             .map((candidate) => this.toPriorityItem(candidate));
+    }
+
+    private getFallbackPriorityCandidates(
+        highPriorityLeadMap: Map<
+            number,
+            { lead: Lead; score: number; priorityLevel: string }
+        >,
+        leads: Lead[]
+    ): { lead: Lead; score: number; priorityLevel: string }[] {
+        if (highPriorityLeadMap.size > 0) {
+            return [];
+        }
+
+        return leads
+            .map((lead) => {
+                const priority = this.scoringService.calculatePriority(lead);
+                lead.updateScore(priority.score);
+
+                return {
+                    lead,
+                    score: priority.score,
+                    priorityLevel: priority.level,
+                };
+            })
+            .filter(
+                ({ lead, priorityLevel, score }) =>
+                    lead.status &&
+                    priorityLevel !== "CLOSED" &&
+                    score > 0
+            )
+            .sort((candidateA, candidateB) => {
+                const scoreDiff = candidateB.score - candidateA.score;
+
+                if (scoreDiff !== 0) {
+                    return scoreDiff;
+                }
+
+                return (
+                    this.getPrioritySortDate(candidateA.lead).getTime() -
+                    this.getPrioritySortDate(candidateB.lead).getTime()
+                );
+            })
+            .slice(0, 5);
     }
 
     getRecentActivities(

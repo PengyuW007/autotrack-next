@@ -34,6 +34,12 @@ describe("ScoringService", () => {
         }))).toBe(55);
 
         expect(scoringService.calculateScore(new Lead({
+            firstName: "Appointment",
+            stage: "APPOINTMENT",
+            createdAt: new Date("2026-06-20"),
+        }))).toBe(65);
+
+        expect(scoringService.calculateScore(new Lead({
             firstName: "TestDrive",
             stage: "TEST_DRIVE",
             createdAt: new Date("2026-06-20"),
@@ -84,6 +90,41 @@ describe("ScoringService", () => {
 
         expect(priority.score).toBe(0);
         expect(priority.level).toBe("CLOSED");
+    });
+
+    test("treats delivered lead as closed with score zero", () => {
+        const priority = scoringService.calculatePriority(new Lead({
+            firstName: "Delivered",
+            stage: "DELIVERED",
+            notes: "urgent ready price",
+            createdAt: new Date("2026-06-01"),
+            lastInteractionDate: new Date("2026-06-20"),
+            lastInteractionBy: "LEAD",
+        }));
+
+        expect(priority.score).toBe(0);
+        expect(priority.level).toBe("CLOSED");
+    });
+
+    test("scores appointment between visited and test drive", () => {
+        const visitedScore = scoringService.calculateScore(new Lead({
+            firstName: "Visited",
+            stage: "VISITED",
+            createdAt: new Date("2026-06-20"),
+        }));
+        const appointmentScore = scoringService.calculateScore(new Lead({
+            firstName: "Appointment",
+            stage: "APPOINTMENT",
+            createdAt: new Date("2026-06-20"),
+        }));
+        const testDriveScore = scoringService.calculateScore(new Lead({
+            firstName: "TestDrive",
+            stage: "TEST_DRIVE",
+            createdAt: new Date("2026-06-20"),
+        }));
+
+        expect(appointmentScore).toBeGreaterThan(visitedScore);
+        expect(appointmentScore).toBeLessThan(testDriveScore);
     });
 
     test("classifies visited lead with one casual visit as medium", () => {

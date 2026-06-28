@@ -236,15 +236,17 @@ export class ScoringService {
     }
 
     private getStageWeight(stage: string | null | undefined): number {
-        if (!stage) return 0;
+        const normalizedStage = this.normalizeStage(stage);
 
-        switch (stage.toUpperCase()) {
+        switch (normalizedStage) {
             case "NEW":
                 return 20;
             case "CONTACTED":
                 return 35;
             case "VISITED":
                 return 55;
+            case "APPOINTMENT":
+                return 65;
             case "TEST_DRIVE":
                 return 75;
             case "NEGOTIATION":
@@ -362,7 +364,9 @@ export class ScoringService {
         if (
             hasStrongBuyingIntent &&
             score >= ScoringService.HOT_THRESHOLD &&
-            (stage === "NEGOTIATION" || stage === "TEST_DRIVE")
+            (stage === "NEGOTIATION" ||
+                stage === "TEST_DRIVE" ||
+                stage === "APPOINTMENT")
         ) {
             return "HOT";
         }
@@ -370,6 +374,7 @@ export class ScoringService {
         if (
             (stage === "NEGOTIATION" && score >= ScoringService.THRESHOLD) ||
             (stage === "TEST_DRIVE" && hasStrongBuyingIntent) ||
+            (stage === "APPOINTMENT" && hasStrongBuyingIntent) ||
             (score >= ScoringService.THRESHOLD && hasStrongBuyingIntent)
         ) {
             return "HIGH";
@@ -407,6 +412,7 @@ export class ScoringService {
 
         return (
             stage === "NEGOTIATION" ||
+            stage === "APPOINTMENT" ||
             this.hasRecentLeadReply(lead) ||
             this.hasUrgencyKeywords(lead) ||
             this.hasMultipleShowroomVisits(lead) ||
@@ -494,7 +500,13 @@ export class ScoringService {
     }
 
     private normalizeStage(stage: string | null | undefined): string {
-        return stage ? stage.toUpperCase() : "DEFAULT";
+        const normalizedStage = stage ? stage.toUpperCase() : "DEFAULT";
+
+        if (normalizedStage === "DELIVERED") {
+            return "CLOSED";
+        }
+
+        return normalizedStage;
     }
 
     private getMissionNameByDay(day: number): string {
