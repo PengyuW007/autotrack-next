@@ -32,8 +32,21 @@ export type DashboardPriorityItem = {
     status: string;
     score: number;
     priorityLevel: string;
+    nextFollowUpDate: string;
+    reasonLabel: string;
     reason: string;
     tone: "red" | "amber" | "blue";
+};
+
+type DashboardPriorityCandidate = {
+    lead: Lead;
+    score: number;
+    priorityLevel: string;
+    reasonLabel: string;
+    reason: string;
+    actionRank: number;
+    nextFollowUpDate: Date | null;
+    activityDate: Date | null;
 };
 
 export type DashboardRecentActivityType = RecentActivityType;
@@ -80,6 +93,12 @@ export class DashboardService {
         const todayTasks = this.getTodayTasks(tasks, leads, targetDate);
         const overdueTasks = this.getOverdueTasks(tasks, targetDate);
         const highPriorityLeads = this.getHighPriorityLeads(leads);
+        const priorityActions = this.getPriorityActions(
+            leads,
+            tasks,
+            notifications,
+            targetDate
+        );
         const recentActivities = this.getRecentActivities(
             leads,
             tasks,
@@ -96,9 +115,7 @@ export class DashboardService {
                 overdueTaskCount: overdueTasks.length,
             },
             todayTasks,
-            priorityActions: highPriorityLeads.map((lead) =>
-                this.toPriorityItem(lead)
-            ),
+            priorityActions,
             recentActivities,
         };
     }
@@ -166,13 +183,134 @@ export class DashboardService {
                 return { lead, priority };
             })
             .filter(
-                ({ priority }) =>
-                    priority.level === "HOT" || priority.level === "HIGH"
+                ({ lead, priority }) =>
+                    lead.status &&
+                    priority.level !== "CLOSED" &&
+                    priority.score >= this.highPriorityThreshold
             )
-            .sort(
-                (leadA, leadB) => leadB.priority.score - leadA.priority.score
-            )
+            .sort((leadA, leadB) => {
+                const scoreDiff = leadB.priority.score - leadA.priority.score;
+
+                if (scoreDiff !== 0) {
+                    return scoreDiff;
+                }
+
+                return (
+                    this.getPrioritySortDate(leadA.lead).getTime() -
+                    this.getPrioritySortDate(leadB.lead).getTime()
+                );
+            })
             .map(({ lead }) => lead);
+    }
+
+    getPriorityActions(
+        leads: Lead[],
+        tasks: Task[],
+        notifications: Notification[],
+        targetDate: Date
+    ): DashboardPriorityItem[] {
+        const candidateMap = new Map<number, DashboardPriorityCandidate>();
+        const highPriorityLeadMap = new Map<
+            number,
+            { lead: Lead; score: number; priorityLevel: string }
+        >();
+
+        for (const lead of leads) {
+            const priority = this.scoringService.calculatePriority(lead);
+            lead.updateScore(priority.score);
+
+            if (
+                !lead.status ||
+                priority.level === "CLOSED" ||
+                priority.score < this.highPriorityThreshold
+            ) {
+                continue;
+            }
+
+            highPriorityLeadMap.set(lead.leadID, {
+                lead,
+                score: priority.score,
+                priorityLevel: priority.level,
+            });
+            this.upsertPriorityCandidate(candidateMap, {
+                lead,
+                score: priority.score,
+                priorityLevel: priority.level,
+                reasonLabel: "High Score Lead",
+                reason: "This lead is recommended because its score is above the high-priority threshold.",
+                actionRank: 40,
+                nextFollowUpDate: lead.followUpDate ?? null,
+                activityDate: lead.lastInteractionDate ?? lead.followUpDate ?? null,
+            });
+        }
+
+        for (const task of tasks) {
+            const leadId = task.getLead()?.leadID;
+            const leadCandidate = leadId
+                ? highPriorityLeadMap.get(leadId)
+                : null;
+
+            if (!leadCandidate || task.isCompleted()) {
+                continue;
+            }
+
+            const isOverdue = this.isTaskOverdue(task, targetDate);
+
+            if (!isOverdue && !this.isRelevantPriorityTask(task, targetDate)) {
+                continue;
+            }
+
+            const taskReason = this.getTaskPriorityReason(task, isOverdue);
+
+            this.upsertPriorityCandidate(candidateMap, {
+                lead: leadCandidate.lead,
+                score: leadCandidate.score,
+                priorityLevel: leadCandidate.priorityLevel,
+                ...taskReason,
+                actionRank: isOverdue ? 10 : 20,
+                nextFollowUpDate: task.getDate(),
+                activityDate: task.getDate(),
+            });
+        }
+
+        for (const notification of notifications) {
+            const leadId = notification.getLead()?.leadID;
+            const leadCandidate = leadId
+                ? highPriorityLeadMap.get(leadId)
+                : null;
+
+            if (
+                !leadCandidate ||
+                !this.isLeadActionNotification(notification)
+            ) {
+                continue;
+            }
+
+            this.upsertPriorityCandidate(candidateMap, {
+                lead: leadCandidate.lead,
+                score: leadCandidate.score,
+                priorityLevel: leadCandidate.priorityLevel,
+                ...this.getNotificationPriorityReason(notification),
+                actionRank: 0,
+                nextFollowUpDate: leadCandidate.lead.followUpDate ?? null,
+                activityDate: notification.getDate(),
+            });
+        }
+
+        return [...candidateMap.values()]
+            .sort((candidateA, candidateB) => {
+                const scoreDiff = candidateB.score - candidateA.score;
+
+                if (scoreDiff !== 0) {
+                    return scoreDiff;
+                }
+
+                return (
+                    this.getPrioritySortDate(candidateA.lead).getTime() -
+                    this.getPrioritySortDate(candidateB.lead).getTime()
+                );
+            })
+            .map((candidate) => this.toPriorityItem(candidate));
     }
 
     getRecentActivities(
@@ -204,7 +342,7 @@ export class DashboardService {
             leadId,
             leadName: lead?.getLeadName() ?? `Lead ${leadId ?? "N/A"}`,
             title: task.getTitle(),
-            type: this.getTaskType(task.getTitle()),
+            type: task.getTaskType() || this.getTaskType(task.getTitle()),
             time: this.formatTime(task.getDate()),
             status,
             score: lead?.score ?? 0,
@@ -212,8 +350,10 @@ export class DashboardService {
         };
     }
 
-    private toPriorityItem(lead: Lead): DashboardPriorityItem {
-        const priority = this.scoringService.calculatePriority(lead);
+    private toPriorityItem(
+        candidate: DashboardPriorityCandidate
+    ): DashboardPriorityItem {
+        const lead = candidate.lead;
 
         return {
             leadId: lead.leadID,
@@ -223,10 +363,14 @@ export class DashboardService {
                 "No vehicle interest listed",
             stage: lead.stage,
             status: lead.status ? "Active" : "Lost",
-            score: Math.floor(priority.score),
-            priorityLevel: priority.level,
-            reason: priority.reasons[0] ?? "High priority lead based on score.",
-            tone: this.getPriorityTone(priority.score),
+            score: Math.floor(candidate.score),
+            priorityLevel: candidate.priorityLevel,
+            nextFollowUpDate: candidate.nextFollowUpDate
+                ? this.formatDisplayDate(candidate.nextFollowUpDate)
+                : "Not scheduled",
+            reasonLabel: candidate.reasonLabel,
+            reason: candidate.reason,
+            tone: this.getPriorityTone(candidate.score),
         };
     }
 
@@ -247,6 +391,10 @@ export class DashboardService {
         }
 
         return "scheduled";
+    }
+
+    private isTaskOverdue(task: Task, targetDate: Date): boolean {
+        return this.formatDate(task.getDate()) < this.formatDate(targetDate);
     }
 
     private getTaskStatusRank(status: DashboardTaskStatus): number {
@@ -301,6 +449,234 @@ export class DashboardService {
         return "blue";
     }
 
+    private getPrioritySortDate(lead: Lead): Date {
+        if (lead.followUpDate) {
+            return lead.followUpDate;
+        }
+
+        if (lead.lastInteractionDate) {
+            return lead.lastInteractionDate;
+        }
+
+        return new Date(8640000000000000);
+    }
+
+    private upsertPriorityCandidate(
+        candidateMap: Map<number, DashboardPriorityCandidate>,
+        candidate: DashboardPriorityCandidate
+    ): void {
+        const existingCandidate = candidateMap.get(candidate.lead.leadID);
+
+        if (!existingCandidate) {
+            candidateMap.set(candidate.lead.leadID, candidate);
+            return;
+        }
+
+        if (
+            candidate.actionRank < existingCandidate.actionRank ||
+            (candidate.actionRank === existingCandidate.actionRank &&
+                this.isNewerActivity(
+                    candidate.activityDate,
+                    existingCandidate.activityDate
+                ))
+        ) {
+            candidateMap.set(candidate.lead.leadID, candidate);
+        }
+    }
+
+    private isNewerActivity(
+        candidateDate: Date | null,
+        existingDate: Date | null
+    ): boolean {
+        if (!candidateDate) {
+            return false;
+        }
+
+        if (!existingDate) {
+            return true;
+        }
+
+        return candidateDate.getTime() > existingDate.getTime();
+    }
+
+    private isRelevantPriorityTask(task: Task, targetDate: Date): boolean {
+        if (!this.isRecentActivityDate(task.getDate(), targetDate)) {
+            return false;
+        }
+
+        const normalizedTask = this.getTaskSearchText(task);
+
+        return (
+            normalizedTask.includes("appointment") ||
+            normalizedTask.includes("test drive") ||
+            normalizedTask.includes("pricing") ||
+            normalizedTask.includes("price") ||
+            normalizedTask.includes("payment") ||
+            normalizedTask.includes("quote") ||
+            normalizedTask.includes("discount") ||
+            normalizedTask.includes("trade-in") ||
+            normalizedTask.includes("trade in") ||
+            normalizedTask.includes("document") ||
+            normalizedTask.includes("delivery")
+        );
+    }
+
+    private isRecentActivityDate(activityDate: Date, targetDate: Date): boolean {
+        const millisecondsPerDay = 24 * 60 * 60 * 1000;
+        const activityDay = new Date(activityDate);
+        const targetDay = new Date(targetDate);
+        activityDay.setHours(0, 0, 0, 0);
+        targetDay.setHours(0, 0, 0, 0);
+
+        return (
+            Math.abs(targetDay.getTime() - activityDay.getTime()) <=
+            14 * millisecondsPerDay
+        );
+    }
+
+    private getTaskPriorityReason(
+        task: Task,
+        isOverdue: boolean
+    ): { reasonLabel: string; reason: string } {
+        const normalizedTask = this.getTaskSearchText(task);
+        const description = this.getTaskDescription(task);
+
+        if (isOverdue) {
+            return {
+                reasonLabel: "Overdue Follow-up",
+                reason: description,
+            };
+        }
+
+        if (
+            normalizedTask.includes("pricing") ||
+            normalizedTask.includes("price") ||
+            normalizedTask.includes("payment") ||
+            normalizedTask.includes("quote") ||
+            normalizedTask.includes("discount")
+        ) {
+            return {
+                reasonLabel: "Pricing Request",
+                reason: description,
+            };
+        }
+
+        if (
+            normalizedTask.includes("appointment") ||
+            normalizedTask.includes("test drive")
+        ) {
+            return {
+                reasonLabel: "Appointment Activity",
+                reason: description,
+            };
+        }
+
+        if (
+            normalizedTask.includes("trade-in") ||
+            normalizedTask.includes("trade in")
+        ) {
+            return {
+                reasonLabel: "Trade-in Discussion",
+                reason: description,
+            };
+        }
+
+        if (normalizedTask.includes("document")) {
+            return {
+                reasonLabel: "Document Collection",
+                reason: description,
+            };
+        }
+
+        if (normalizedTask.includes("delivery")) {
+            return {
+                reasonLabel: "Delivery Preparation",
+                reason: description,
+            };
+        }
+
+        return {
+            reasonLabel: "Recent Lead Activity",
+            reason: description,
+        };
+    }
+
+    private getTaskDescription(task: Task): string {
+        const notes = task.getNotes().trim();
+
+        if (notes) {
+            return notes;
+        }
+
+        return task.getTitle();
+    }
+
+    private getTaskSearchText(task: Task): string {
+        return [task.getTaskType(), task.getTitle(), task.getNotes()]
+            .join(" ")
+            .toLowerCase();
+    }
+
+    private isLeadActionNotification(notification: Notification): boolean {
+        const title = notification.getTitle().toLowerCase();
+
+        return (
+            title.includes("sent you") ||
+            title.includes("replied") ||
+            title.includes("called you") ||
+            title.includes("incoming") ||
+            title.includes("confirmed appointment") ||
+            title.includes("appointment confirmed") ||
+            title.includes("confirmed test drive") ||
+            title.includes("pricing") ||
+            title.includes("price") ||
+            title.includes("appointment")
+        );
+    }
+
+    private getNotificationPriorityReason(
+        notification: Notification
+    ): { reasonLabel: string; reason: string } {
+        const title = notification.getTitle().toLowerCase();
+        const description = notification.getTitle();
+
+        if (title.includes("price") || title.includes("pricing")) {
+            return {
+                reasonLabel: "Pricing Request",
+                reason: description,
+            };
+        }
+
+        if (
+            title.includes("appointment") ||
+            title.includes("confirmed test drive")
+        ) {
+            return {
+                reasonLabel: "Appointment Activity",
+                reason: description,
+            };
+        }
+
+        if (title.includes("called")) {
+            return {
+                reasonLabel: "Unreplied Customer Call",
+                reason: description,
+            };
+        }
+
+        if (title.includes("email")) {
+            return {
+                reasonLabel: "Unreplied Customer Email",
+                reason: description,
+            };
+        }
+
+        return {
+            reasonLabel: "Unreplied Customer Message",
+            reason: description,
+        };
+    }
+
     private formatDate(date: Date): string {
         const normalizedDate = new Date(date);
         const year = normalizedDate.getFullYear();
@@ -314,6 +690,14 @@ export class DashboardService {
         return new Intl.DateTimeFormat("en-CA", {
             hour: "numeric",
             minute: "2-digit",
+        }).format(date);
+    }
+
+    private formatDisplayDate(date: Date): string {
+        return new Intl.DateTimeFormat("en-CA", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
         }).format(date);
     }
 

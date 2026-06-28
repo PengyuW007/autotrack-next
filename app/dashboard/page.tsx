@@ -17,15 +17,47 @@ import { AgendaService } from "@/domain/business/AgendaService";
 import { DashboardService } from "@/domain/business/DashboardService";
 import { PriorityManager } from "@/domain/business/PriorityManager";
 import { ScoringService } from "@/domain/business/ScoringService";
+import { Lead } from "@/domain/objects/Lead";
+import { LeadTradeInVehicleRepo } from "@/lib/persistence/real/supabase/LeadTradeInVehicleRepo";
+import { LeadVehicleInterestRepo } from "@/lib/persistence/real/supabase/LeadVehicleInterestRepo";
 import { LeadRepo } from "@/lib/persistence/real/supabase/LeadRepo";
 import { NotificationRepo } from "@/lib/persistence/real/supabase/NotificationRepo";
 import { TaskRepo } from "@/lib/persistence/real/supabase/TaskRepo";
+import { VehicleRepo } from "@/lib/persistence/real/supabase/VehicleRepo";
 import { DashboardRecentActivityType } from "@/domain/business/DashboardService";
 import DashboardTaskCard from "@/components/dashboard/DashboardTaskCard";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
+
+async function hydrateLeadVehicleData(leads: Lead[]): Promise<Lead[]> {
+    const vehicleRepository = new VehicleRepo();
+    const vehicleInterestRepository = new LeadVehicleInterestRepo(
+        vehicleRepository
+    );
+    const tradeInVehicleRepository = new LeadTradeInVehicleRepo(
+        vehicleRepository
+    );
+
+    return Promise.all(
+        leads.map(async (lead) => {
+            const [vehicleInterest, tradeInVehicle] = await Promise.all([
+                vehicleInterestRepository.getVehicleInterestByLeadId(
+                    lead.leadID
+                ),
+                tradeInVehicleRepository.getTradeInVehicleByLeadId(
+                    lead.leadID
+                ),
+            ]);
+
+            lead.vehicleInterest = vehicleInterest;
+            lead.tradeInVehicle = tradeInVehicle;
+
+            return lead;
+        })
+    );
+}
 
 function getPriorityTone(tone: string) {
     if (tone === "red") {
@@ -78,9 +110,10 @@ export default async function DashboardPage() {
         taskRepo.getAllTasks(),
         notificationRepo.getAllNotifications(),
     ]);
+    const hydratedLeads = await hydrateLeadVehicleData(leads);
 
     const systemTasks = agendaService.getMissingSystemAssignedTasksUpToDate(
-        leads,
+        hydratedLeads,
         tasks,
         targetDate
     );
@@ -94,7 +127,7 @@ export default async function DashboardPage() {
     const allTasks = agendaService.getUniqueTasks(persistedTasks);
 
     const dashboardData = dashboardService.getDashboardData(
-        leads,
+        hydratedLeads,
         allTasks,
         notifications,
         targetDate
@@ -164,7 +197,7 @@ export default async function DashboardPage() {
                                 Priority Action Center
                             </h2>
                             <p className="mt-1 text-sm text-slate-500">
-                                Recommended urgent actions based on score, overdue work, unreplied messages, and important lead activity.
+                                Recommended customers to contact first based on lead score, overdue follow-ups, replies, and important activity.
                             </p>
                         </div>
 
@@ -196,12 +229,18 @@ export default async function DashboardPage() {
                                             {action.vehicleInterest}
                                         </p>
                                         <p className="mt-2 text-sm text-slate-700">
+                                            Next follow-up: {action.nextFollowUpDate}
+                                        </p>
+                                        <span className="mt-3 inline-flex rounded-full bg-white/80 px-2.5 py-1 text-xs font-semibold">
+                                            {action.reasonLabel}
+                                        </span>
+                                        <p className="mt-2 text-sm text-slate-700">
                                             {action.reason}
                                         </p>
                                     </div>
 
                                     <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold">
-                                        High
+                                        {action.priorityLevel}
                                     </span>
                                 </div>
                             </Link>
@@ -209,7 +248,7 @@ export default async function DashboardPage() {
 
                         {dashboardData.priorityActions.length === 0 ? (
                             <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                                No high-priority leads found.
+                                Great work! There are currently no high-priority leads requiring immediate attention.
                             </p>
                         ) : null}
                     </div>
