@@ -353,7 +353,7 @@ export default function LeadDetailPanel({
     >(null);
     const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [newTaskType, setNewTaskType] = useState(taskTypeOptions[0]);
+    const [newTaskType, setNewTaskType] = useState("");
     const [newTaskNotes, setNewTaskNotes] = useState("");
     const [newTaskDate, setNewTaskDate] = useState(
         new Date().toISOString().split("T")[0]
@@ -590,7 +590,7 @@ export default function LeadDetailPanel({
             }
 
             await reloadLeadTasks(taskRepository);
-            setNewTaskType(taskTypeOptions[0]);
+            setNewTaskType("");
             setNewTaskNotes("");
             setNewTaskDate(new Date().toISOString().split("T")[0]);
             setNewTaskTime("09:00");
@@ -1306,55 +1306,60 @@ export default function LeadDetailPanel({
                                 <p className="text-sm font-semibold text-slate-950">
                                     Add Task for This Lead
                                 </p>
-                                <div className="mt-3 grid gap-3 md:grid-cols-[220px_1fr_150px_120px_auto]">
-                                    <select
-                                        value={newTaskType}
-                                        onChange={(event) =>
-                                            setNewTaskType(event.target.value)
-                                        }
-                                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
-                                    >
-                                        {taskTypeOptions.map((taskType) => (
-                                            <option
-                                                key={taskType}
-                                                value={taskType}
-                                            >
-                                                {taskType}
+                                <div className="mt-3 space-y-3">
+                                    <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_150px_120px_auto]">
+                                        <select
+                                            value={newTaskType}
+                                            onChange={(event) =>
+                                                setNewTaskType(event.target.value)
+                                            }
+                                            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
+                                        >
+                                            <option value="" disabled>
+                                                Select task type
                                             </option>
-                                        ))}
-                                    </select>
+                                            {taskTypeOptions.map((taskType) => (
+                                                <option
+                                                    key={taskType}
+                                                    value={taskType}
+                                                >
+                                                    {taskType}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <input
+                                            type="date"
+                                            value={newTaskDate}
+                                            onChange={(event) =>
+                                                setNewTaskDate(event.target.value)
+                                            }
+                                            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
+                                        />
+                                        <input
+                                            type="time"
+                                            value={newTaskTime}
+                                            onChange={(event) =>
+                                                setNewTaskTime(event.target.value)
+                                            }
+                                            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
+                                        />
+                                        <button
+                                            onClick={handleCreateTask}
+                                            disabled={creatingTask}
+                                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                                        >
+                                            <PlusCircle size={16} />
+                                            {creatingTask ? "Adding..." : "Add"}
+                                        </button>
+                                    </div>
                                     <input
                                         value={newTaskNotes}
                                         onChange={(event) =>
                                             setNewTaskNotes(event.target.value)
                                         }
                                         placeholder="Short notes or description"
-                                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
+                                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
                                     />
-                                    <input
-                                        type="date"
-                                        value={newTaskDate}
-                                        onChange={(event) =>
-                                            setNewTaskDate(event.target.value)
-                                        }
-                                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
-                                    />
-                                    <input
-                                        type="time"
-                                        value={newTaskTime}
-                                        onChange={(event) =>
-                                            setNewTaskTime(event.target.value)
-                                        }
-                                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-950"
-                                    />
-                                    <button
-                                        onClick={handleCreateTask}
-                                        disabled={creatingTask}
-                                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-                                    >
-                                        <PlusCircle size={16} />
-                                        {creatingTask ? "Adding..." : "Add"}
-                                    </button>
                                 </div>
                             </div>
 
