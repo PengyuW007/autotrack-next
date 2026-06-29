@@ -147,6 +147,11 @@ export default function AgendaActivityPanel({
                                     >
                                         {activity.title}
                                     </h3>
+                                    {isTask && activity.notes ? (
+                                        <p className="mt-1 text-sm text-slate-500">
+                                            {activity.notes}
+                                        </p>
+                                    ) : null}
                                     <p className="mt-1 text-sm text-slate-500">
                                         {activity.leadName} - {formatTime(activity.date)}
                                     </p>

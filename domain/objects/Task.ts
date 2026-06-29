@@ -2,6 +2,18 @@ import { Event } from "./Event";
 import { Lead } from "./Lead";
 
 export class Task extends Event {
+    static readonly TASK_TYPE_OPTIONS = [
+        "Follow-up",
+        "Appointment",
+        "Virtual Appointment",
+        "Test Drive",
+        "Pricing Request",
+        "Trade-in Discussion",
+        "Document Collection",
+        "Delivery Preparation",
+        "General Reminder",
+    ];
+
     private completed: boolean;
     private taskType: string;
     private notes: string;

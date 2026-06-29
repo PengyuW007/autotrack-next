@@ -13,6 +13,7 @@ export type AgendaActivity = {
     date: Date;
     leadId: number | null;
     leadName: string;
+    notes?: string;
     completed: boolean | null;
 };
 
@@ -116,6 +117,7 @@ export class AgendaService {
                     date: task.getDate(),
                     leadId: lead?.leadID ?? null,
                     leadName: lead?.getLeadName() ?? "No lead assigned",
+                    notes: task.getNotes(),
                     completed: task.isCompleted(),
                 };
             });

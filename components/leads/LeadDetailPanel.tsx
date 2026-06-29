@@ -106,18 +106,6 @@ const stageOptions = [
     "CLOSED",
 ];
 
-const taskTypeOptions = [
-    "Follow-up",
-    "Appointment",
-    "Virtual Appointment",
-    "Test Drive",
-    "Pricing Request",
-    "Trade-in Discussion",
-    "Document Collection",
-    "Delivery Preparation",
-    "General Reminder",
-];
-
 const currencyFormatter = new Intl.NumberFormat("en-CA", {
     style: "currency",
     currency: "CAD",
@@ -1318,14 +1306,16 @@ export default function LeadDetailPanel({
                                             <option value="" disabled>
                                                 Select task type
                                             </option>
-                                            {taskTypeOptions.map((taskType) => (
-                                                <option
-                                                    key={taskType}
-                                                    value={taskType}
-                                                >
-                                                    {taskType}
-                                                </option>
-                                            ))}
+                                            {Task.TASK_TYPE_OPTIONS.map(
+                                                (taskType) => (
+                                                    <option
+                                                        key={taskType}
+                                                        value={taskType}
+                                                    >
+                                                        {taskType}
+                                                    </option>
+                                                )
+                                            )}
                                         </select>
                                         <input
                                             type="date"

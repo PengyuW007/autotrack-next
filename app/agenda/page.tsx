@@ -90,7 +90,8 @@ export default function AgendaPage() {
     const [leadSearchResults, setLeadSearchResults] = useState<Lead[]>([]);
     const [leadSearchLoading, setLeadSearchLoading] = useState(false);
     const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-    const [newTaskTitle, setNewTaskTitle] = useState("");
+    const [newTaskType, setNewTaskType] = useState("");
+    const [newTaskNotes, setNewTaskNotes] = useState("");
     const [newTaskDate, setNewTaskDate] = useState(formatDateInput(new Date()));
     const [newTaskTime, setNewTaskTime] = useState("09:00");
     const [creatingTask, setCreatingTask] = useState(false);
@@ -225,19 +226,23 @@ export default function AgendaPage() {
             return;
         }
 
-        if (!newTaskTitle.trim()) {
-            setCreateError("Task title is required.");
+        if (!newTaskType.trim()) {
+            setCreateError("Select a task type before creating the task.");
             return;
         }
 
         setCreatingTask(true);
         setCreateError(null);
 
+        const taskType = newTaskType.trim();
         const taskRepo = new TaskRepo();
         const task = new Task(
             selectedLead,
-            newTaskTitle.trim(),
-            createDateTime(newTaskDate, newTaskTime)
+            taskType,
+            createDateTime(newTaskDate, newTaskTime),
+            -1,
+            taskType,
+            newTaskNotes.trim()
         );
         const error = await taskRepo.insertTask(task);
 
@@ -248,7 +253,8 @@ export default function AgendaPage() {
         }
 
         setCreatingTask(false);
-        setNewTaskTitle("");
+        setNewTaskType("");
+        setNewTaskNotes("");
         setLeadSearchText("");
         setSelectedLead(null);
         setLeadSearchResults([]);
@@ -384,102 +390,129 @@ export default function AgendaPage() {
 
                 <form
                     onSubmit={handleCreateTask}
-                    className="grid gap-4 lg:grid-cols-[1.3fr_1.3fr_0.8fr_0.7fr_auto]"
+                    className="space-y-4"
                 >
-                    <div className="relative">
-                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Lead
-                        </label>
-                        <input
-                            type="search"
-                            value={leadSearchText}
-                            onChange={(e) =>
-                                handleLeadSearchChange(e.target.value)
-                            }
-                            placeholder="Search by name, phone, or email"
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                        />
+                    <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr_0.75fr_0.65fr_auto]">
+                        <div className="relative">
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Lead
+                            </label>
+                            <input
+                                type="search"
+                                value={leadSearchText}
+                                onChange={(e) =>
+                                    handleLeadSearchChange(e.target.value)
+                                }
+                                placeholder="Search by name, phone, or email"
+                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                            />
 
-                        {leadSearchText.trim().length >= 2 &&
-                        !selectedLead &&
-                        (leadSearchLoading || leadSearchResults.length > 0) ? (
-                            <div className="absolute z-10 mt-2 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-                                {leadSearchLoading ? (
-                                    <div className="px-3 py-2 text-sm text-slate-500">
-                                        Searching leads...
-                                    </div>
-                                ) : null}
+                            {leadSearchText.trim().length >= 2 &&
+                            !selectedLead &&
+                            (leadSearchLoading || leadSearchResults.length > 0) ? (
+                                <div className="absolute z-10 mt-2 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                                    {leadSearchLoading ? (
+                                        <div className="px-3 py-2 text-sm text-slate-500">
+                                            Searching leads...
+                                        </div>
+                                    ) : null}
 
-                                {!leadSearchLoading
-                                    ? leadSearchResults.map((lead) => (
-                                          <button
-                                              key={lead.leadID}
-                                              type="button"
-                                              onClick={() => handleSelectLead(lead)}
-                                              className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-                                          >
-                                              <span className="font-medium text-slate-950">
-                                                  {lead.getLeadName()}
-                                              </span>
-                                              <span className="mt-0.5 block text-xs text-slate-500">
-                                                  {formatLeadDetails(lead) ||
-                                                      `Lead #${lead.leadID}`}
-                                              </span>
-                                          </button>
-                                      ))
-                                    : null}
-                            </div>
-                        ) : null}
+                                    {!leadSearchLoading
+                                        ? leadSearchResults.map((lead) => (
+                                              <button
+                                                  key={lead.leadID}
+                                                  type="button"
+                                                  onClick={() =>
+                                                      handleSelectLead(lead)
+                                                  }
+                                                  className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                                              >
+                                                  <span className="font-medium text-slate-950">
+                                                      {lead.getLeadName()}
+                                                  </span>
+                                                  <span className="mt-0.5 block text-xs text-slate-500">
+                                                      {formatLeadDetails(lead) ||
+                                                          `Lead #${lead.leadID}`}
+                                                  </span>
+                                              </button>
+                                          ))
+                                        : null}
+                                </div>
+                            ) : null}
+                        </div>
+
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Task Type
+                            </label>
+                            <select
+                                value={newTaskType}
+                                onChange={(e) => {
+                                    setNewTaskType(e.target.value);
+                                    setCreateError(null);
+                                }}
+                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                            >
+                                <option value="" disabled>
+                                    Select task type
+                                </option>
+                                {Task.TASK_TYPE_OPTIONS.map((taskType) => (
+                                    <option key={taskType} value={taskType}>
+                                        {taskType}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Date
+                            </label>
+                            <input
+                                type="date"
+                                value={newTaskDate}
+                                onChange={(e) => setNewTaskDate(e.target.value)}
+                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Time
+                            </label>
+                            <input
+                                type="time"
+                                value={newTaskTime}
+                                onChange={(e) => setNewTaskTime(e.target.value)}
+                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                            />
+                        </div>
+
+                        <div className="flex items-end">
+                            <button
+                                type="submit"
+                                disabled={creatingTask}
+                                className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                            >
+                                {creatingTask ? "Creating..." : "Add Task"}
+                            </button>
+                        </div>
                     </div>
 
                     <div>
                         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Task
+                            Short Description / Notes
                         </label>
                         <input
                             type="text"
-                            value={newTaskTitle}
+                            value={newTaskNotes}
                             onChange={(e) => {
-                                setNewTaskTitle(e.target.value);
+                                setNewTaskNotes(e.target.value);
                                 setCreateError(null);
                             }}
-                            placeholder="Example: Confirm test drive"
+                            placeholder="Customer request or follow-up notes"
                             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500"
                         />
-                    </div>
-
-                    <div>
-                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Date
-                        </label>
-                        <input
-                            type="date"
-                            value={newTaskDate}
-                            onChange={(e) => setNewTaskDate(e.target.value)}
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Time
-                        </label>
-                        <input
-                            type="time"
-                            value={newTaskTime}
-                            onChange={(e) => setNewTaskTime(e.target.value)}
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                        />
-                    </div>
-
-                    <div className="flex items-end">
-                        <button
-                            type="submit"
-                            disabled={creatingTask}
-                            className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                        >
-                            {creatingTask ? "Creating..." : "Add Task"}
-                        </button>
                     </div>
                 </form>
 
